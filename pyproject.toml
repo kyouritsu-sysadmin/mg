@@ -1,0 +1,11 @@
+[project]
+name = "test-claiudesdk"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "claude-agent-sdk>=0.2.87",
+    "fastapi>=0.136.3",
+    "pymupdf>=1.27.2.3",
+]
