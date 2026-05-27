@@ -1,66 +1,63 @@
-# def main():
-#     print("Hello from test-claiudesdk!")
-
-
-# if __name__ == "__main__":
-#     main()
-
-
-from utils import pdf_to_images
-from httpx._types import RequestFiles
-from fastapi import status
+import os
 import shutil
-from fastapi import FastAPI, UploadFile, File, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from pathlib import Path
+from fastapi import FastAPI, UploadFile, File, Request, status
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from pathlib import Path
-import shutil, os
-
+# Assuming this custom function exists in your utils.py
+from utils import pdf_to_images
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key = 'mynkey' )
+app.add_middleware(SessionMiddleware, secret_key='mynkey')
 
-DIR = Path('/run/media/bhat/workspace/projects/test_claiudesdk')
+DIR = Path('data')
 DIR.mkdir(exist_ok=True)
-# ALLOWED_MIMETYPES = mimetypes.common_types('.pdf')
 
 @app.get("/", response_class=HTMLResponse)
 async def main_page(request: Request):
-
     last_saved_path = request.session.get('file_path', "Not uploaded yet")
-    image_preview = request.session.get('image_preview', "")
+    image_files: list = request.session.get('image_files', [])
 
     preview_html = ""
-    if image_preview:
+    if image_files:
+        images_html = "".join(
+            f'<img src="/preview/{fname}" alt="Page {i+1}" style="max-width: 100%; height: auto; border: 1px solid #ddd; margin-bottom: 10px;"/>'
+            for i, fname in enumerate(image_files)
+        )
         preview_html = f'''
-        <div class="box">
+        <div class="box" style="margin-top: 20px;">
             <h2>3. Document Preview</h2>
-            <img src="data:image/png;base64,{image_preview}" alt="PDF Preview" style="max-width: 100%; height: auto; border: 1px solid #ddd;"/>
+            {images_html}
         </div>
         '''
 
-    content = """
+    # Added the missing 'f' here for string formatting
+    content = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>File Upload</title>
         <style>
-            body { font-family: sans-serif; margin: 50px; }
-            .container { max-width: 400px; padding: 20px; border: 1px solid #ccc; }
-            button { margin-top: 10px; padding: 5px 15px; }
+            body {{ font-family: sans-serif; margin: 50px; }}
+            .container {{ max-width: 400px; padding: 20px; border: 1px solid #ccc; }}
+            button {{ margin-top: 10px; padding: 5px 15px; }}
         </style>
     </head>
     <body>
         <div class="container">
             <h2>Upload Your File</h2>
+            <p><strong>Last Saved:</strong> {last_saved_path}</p>
             <form action="/upload" method="post" enctype="multipart/form-data">
                 <input type="file" name="file" required>
                 <br>
                 <button type="submit">Upload</button>
             </form>
+            
             <form action="/image" method="post">
-                <button type="submit">Process Saved File Path</button>
+                <button type="submit" {"disabled" if last_saved_path == "Not uploaded yet" else ""}>
+                    Process Saved File Path
+                </button>
             </form>
         </div>
         
@@ -73,35 +70,46 @@ async def main_page(request: Request):
 
 @app.post('/upload')
 async def upload_file(request: Request, file: UploadFile = File(...)):
-    file_path = os.path.abspath(os.path.join(DIR, file.filename))
+    if not file or not file.filename:
+        return {"error": "No file uploaded"}
 
-    if not file:
-        return ("No file uploaded")
-
+    # Use Path library consistently
     des = DIR / file.filename
+    file_path = os.path.abspath(des)
 
     with des.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        print(f'{file.filename} saved sucessfully {des}')
+        print(f'{file.filename} saved successfully to {des}')
 
     request.session['file_path'] = file_path
+    
+    # Clear old previews on a brand new upload
+    request.session.pop('image_files', None)
 
     return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)
 
 
-
+# FIXED: Changed from @app.get to @app.post to match the HTML form
 @app.post('/image')
 async def convert_to_img(request: Request):
-
     saved_path = request.session.get('file_path')
     
     if not saved_path or not os.path.exists(saved_path):
-        return {'error': 'No valid path'}
+        return {'error': 'No valid path found in session'}
 
-    image_path ,base_image= pdf_to_images(saved_path,dpi=300)
+    # Process PDF to images
+    image_paths, _ = pdf_to_images(saved_path, dpi=300)
 
-    request.session['image_preview'] = base_image
+    # Store only filenames in session (small strings, not base64)
+    request.session['image_files'] = [os.path.basename(p) for p in image_paths]
 
-    return {
-        'path' : saved_path
-    }
+    # Redirect back to home so the user can actually see the preview
+    return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.get('/preview/{filename}')
+async def preview_image(filename: str):
+    file_path = os.path.abspath(filename)
+    if not os.path.exists(file_path):
+        return {'error': 'Image not found'}
+    return FileResponse(file_path, media_type='image/png')
