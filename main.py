@@ -4,8 +4,6 @@ from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from starlette.middleware.sessions import SessionMiddleware
-
-# Assuming this custom function exists in your utils.py
 from utils import pdf_to_images
 
 app = FastAPI()
@@ -31,8 +29,7 @@ async def main_page(request: Request):
             {images_html}
         </div>
         '''
-
-    # Added the missing 'f' here for string formatting
+        
     content = f"""
     <!DOCTYPE html>
     <html>
@@ -83,13 +80,12 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 
     request.session['file_path'] = file_path
     
-    # Clear old previews on a brand new upload
     request.session.pop('image_files', None)
 
     return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)
 
 
-# FIXED: Changed from @app.get to @app.post to match the HTML form
+
 @app.post('/image')
 async def convert_to_img(request: Request):
     saved_path = request.session.get('file_path')
@@ -97,13 +93,12 @@ async def convert_to_img(request: Request):
     if not saved_path or not os.path.exists(saved_path):
         return {'error': 'No valid path found in session'}
 
-    # Process PDF to images
+
     image_paths, _ = pdf_to_images(saved_path, dpi=300)
 
-    # Store only filenames in session (small strings, not base64)
+  
     request.session['image_files'] = [os.path.basename(p) for p in image_paths]
 
-    # Redirect back to home so the user can actually see the preview
     return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)
 
 
