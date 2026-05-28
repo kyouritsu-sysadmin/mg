@@ -39,9 +39,14 @@ from claude_agent_sdk import (
     ClaudeAgentOptions
 )
 
-IMAGE_PATH = "/run/media/bhat/workspace/projects/test_claiudesdk/output_1.png"
-WORKSPACE = Path(__file__).parent / "data"
+IMAGE_PATH = WORKSPACE / "__images"
+WORKSPACE   = Path(__file__).parent / "data"
+CROPS_DIR   = WORKSPACE / "__crops"
+SCRATCH_DIR = WORKSPACE / "__scratch"
+
 WORKSPACE.mkdir(exist_ok=True)
+CROPS_DIR.mkdir(exist_ok=True)
+SCRATCH_DIR.mkdir(exist_ok=True)
 
 
 @tool(
@@ -66,7 +71,7 @@ async def crop_region(args):
         int((args["x"] + args["width"]) * W),
         int((args["y"] + args["height"]) * H),
     )
-    out_path = WORKSPACE / f"crop_{uuid.uuid4().hex[:8]}.png"
+    out_path = CROPS_DIR / f"crop_{uuid.uuid4().hex[:8]}.png"
     cropped = img.crop(box)
 
    
@@ -84,6 +89,9 @@ async def crop_region(args):
             "mimeType": "image/png",
         }]
     }
+
+async def get_images(path: str):
+    pass
 
 
 image_tools_server = create_sdk_mcp_server("image_tools", tools=[crop_region])
@@ -171,6 +179,9 @@ async def main():
             clean = result.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
             try:
                 data = ProjectInfo.model_validate(json.loads(clean))
+                (SCRATCH_DIR / f"{data.project_title}_result_project_info.json{uuid.uuid4.hex[:4]}").write_text(
+                    json.dumps(data.model_dump(), indent=2)
+                )
                 return data
             except (json.JSONDecodeError, ValidationError) as e:
                 if attempt == MAX_ATTEMPTS:

@@ -9,8 +9,13 @@ from utils import pdf_to_images
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key='mynkey')
 
-DIR = Path('data')
-DIR.mkdir(exist_ok=True)
+WORKSPACE     = Path(__file__).parent / "data"
+ORIGINALS_DIR = WORKSPACE / "__originals"
+IMAGES_DIR    = WORKSPACE / "__images"
+
+WORKSPACE.mkdir(exist_ok=True)
+ORIGINALS_DIR.mkdir(exist_ok=True)
+IMAGES_DIR.mkdir(exist_ok=True)
 
 @app.get("/", response_class=HTMLResponse)
 async def main_page(request: Request):
@@ -71,8 +76,8 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         return {"error": "No file uploaded"}
 
     # Use Path library consistently
-    des = DIR / file.filename
-    file_path = os.path.abspath(des)
+    des = ORIGINALS_DIR / file.filename
+    file_path = str(ORIGINALS_DIR / file.filename)
 
     with des.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -94,7 +99,7 @@ async def convert_to_img(request: Request):
         return {'error': 'No valid path found in session'}
 
 
-    image_paths, _ = pdf_to_images(saved_path, dpi=300)
+    image_paths, _ = pdf_to_images(saved_path, IMAGES_DIR, dpi=300)
 
   
     request.session['image_files'] = [os.path.basename(p) for p in image_paths]
@@ -104,7 +109,7 @@ async def convert_to_img(request: Request):
 
 @app.get('/preview/{filename}')
 async def preview_image(filename: str):
-    file_path = os.path.abspath(filename)
-    if not os.path.exists(file_path):
+    file_path = IMAGES_DIR / filename
+    if not file_path.exists():
         return {'error': 'Image not found'}
     return FileResponse(file_path, media_type='image/png')
