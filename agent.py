@@ -21,21 +21,23 @@
 #         await client.query(input(''))
 
 
-
-# step1_smoke.py
+from claude_agent_sdk import ClaudeSDKClient
+from models import ProjectInfo
 import asyncio
 import base64
 import uuid
 from pathlib import Path
-
+import json
+from pydantic import ValidationError
 from claude_agent_sdk import (
     AssistantMessage,
     ResultMessage,
     TextBlock,
+    ThinkingBlock,
     create_sdk_mcp_server,
     tool,
+    ClaudeAgentOptions
 )
-from claude_agent_sdk import query, ClaudeAgentOptions
 
 IMAGE_PATH = "/run/media/bhat/workspace/projects/test_claiudesdk/output_1.png"
 WORKSPACE = Path(__file__).parent / "data"
@@ -66,7 +68,13 @@ async def crop_region(args):
     )
     out_path = WORKSPACE / f"crop_{uuid.uuid4().hex[:8]}.png"
     cropped = img.crop(box)
-    cropped.save(out_path)
+
+   
+    MAX_DIM = 1600
+    if cropped.width > MAX_DIM or cropped.height > MAX_DIM:
+        cropped.thumbnail((MAX_DIM, MAX_DIM), Image.LANCZOS)
+
+    cropped.save(out_path, format="PNG", optimize=True)
 
     buf = base64.b64encode(out_path.read_bytes()).decode()
     return {
@@ -78,42 +86,99 @@ async def crop_region(args):
     }
 
 
-# Register crop_region as an in-process MCP server so Claude can call it.
-# can_use_tool is for permission callbacks only — not needed here.
 image_tools_server = create_sdk_mcp_server("image_tools", tools=[crop_region])
+
+MAX_ATTEMPTS = 3
+SCHEMA_DESCRIPTION = """
+{
+  "project_title": "string",
+  "design_firm": "string",
+  "date": "int",
+  "cubicle_info": [
+    {
+      "cubicle_name": "string",
+      "power_specification": "string",
+      "cubicle_type": "string"
+    }
+  ],
+  "cubicle_count": integer,
+  "project_location": "string",
+  "transformer_count": integer,
+  "transformers": [
+    {
+      "power_rating_kva": number or null,
+      "primary_voltage_kv": number or null,
+      "secondary_voltage_v": number or null,
+      "specifications": "string or null"
+    }
+  ],
+  "confidence": "high | medium | low"
+}
+"""
+
+BASE_PROMPT = (
+    f"Read the image at {IMAGE_PATH}. "
+    "This is an electrical cubicle panel drawing. "
+    "Perform an extraction on this image and retrieve the following:\n"
+    "1. Project title\n"
+    "2. How many cubicles or electrical boards are planned in this project\n"
+    "3. Number of transformers used along with their power rating and specifications.\n"
+    f"Schema to follow:\n{SCHEMA_DESCRIPTION}\n"
+    "Return ONLY a raw JSON object matching the schema. No markdown fences, no explanation."
+)
 
 
 async def main():
     options = ClaudeAgentOptions(
         mcp_servers={"image_tools": image_tools_server},
-        allowed_tools=["Read", "crop_region", "Bash"],  # auto-allow; no permission prompt
+        allowed_tools=["Read", "mcp__image_tools__crop_region"],
         permission_mode="acceptEdits",
-        max_turns=10,
-        thinking={'type': 'adaptive'},
-        cwd=WORKSPACE,  # CLI subprocess resolves relative paths from here
-    )
-    prompt = (
-        f"Read the image at {IMAGE_PATH}. "
-        "This is an electrical cubicle panel drawing. "
-        "Tell me at what resolution and aspect ratio you received this image "
-        "and at what resolution and aspect ratio you process it."
-        "Perform an extraction on this image and retrieve me the following"
-        "1. Project title"
-        "2. How many cubicle or electrical boards are planned in this project"
-        "3. Number of Transfomers used in this project along with their power rating and specifications."
+        max_turns=20,
+        max_buffer_size=10*1024*1024,
+        thinking={'type': 'adaptive', 'display': 'summarized'},
+        cwd=WORKSPACE,
     )
 
-    async for message in query(prompt=prompt, options=options):
-        if isinstance(message, ResultMessage):
-            print(f'Model usage: {message.model_usage}')
-            print(f'Total cost: {message.total_cost_usd}')
-            print(f'Usage: {message.usage}')
-        if isinstance(message, AssistantMessage):
-            if message.usage:
-                print(f'Usage keys: {list(message.usage.keys())}')
-            print(f'Content blocks: {len(message.content)}')
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    print(f"From Claude: {block.text}")
+    async with ClaudeSDKClient(options=options) as client:
+        current_prompt = BASE_PROMPT
+
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            result = ""
+            turn = 0
+            await client.query(current_prompt)
+            async for message in client.receive_response():
+                if isinstance(message, AssistantMessage):
+                    turn += 1
+                    print(f"\n--- Turn {turn} ---")
+                    for block in message.content:
+                        if isinstance(block, ThinkingBlock):
+                            print(f"[Thinking]: {block.thinking}")
+                        elif isinstance(block, TextBlock):
+                            print(f"[Text]: {block.text}")
+                if isinstance(message, ResultMessage):
+                    result = message.result or ""
+                    tokens = message.usage or {}
+                    print(f"\n--- Result ---")
+                    print(f"Turns: {message.num_turns}")
+                    print(f"Total cost: ${message.total_cost_usd:.4f}")
+                    print(f"Input tokens: {tokens.get('input_tokens')}  Output tokens: {tokens.get('output_tokens')}")
+
+            if not result.strip():
+                print(f"[Attempt {attempt}] Empty result — Claude produced no JSON output.")
+                prompt = f"{BASE_PROMPT}\n\nYour previous response contained no JSON. Return ONLY a raw JSON object."
+                continue
+
+            clean = result.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            try:
+                data = ProjectInfo.model_validate(json.loads(clean))
+                return data
+            except (json.JSONDecodeError, ValidationError) as e:
+                if attempt == MAX_ATTEMPTS:
+                    raise 
+                # RuntimeError(f"Failed after {MAX_ATTEMPTS} attempts. Last error: {e}") from e
+                current_prompt = (
+                f"Your previous output failed validation: {e}\n"
+                "Fix it and return only valid JSON matching the schema."
+                )
 
 asyncio.run(main())

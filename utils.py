@@ -1,6 +1,7 @@
 # pyrefly: ignore [missing-import]
 import fitz
 import base64
+import PIL 
 
 def pdf_to_images(pdf_path: str, dpi: int):
     doc = fitz.open(pdf_path)
