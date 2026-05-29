@@ -1,3 +1,4 @@
+from click.types import DateTime
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
@@ -16,6 +17,26 @@ from typing import Optional, Literal
 #     bird_net_material :  Optional[bool] = None
 #     cubicle_material : str
 #     cubicleinfo : List[CubicleInfo]
+
+class UserData(BaseModel):
+    pass
+
+class SessionData(BaseModel):
+    project_name: str
+    project_description : str | Optional[None]
+    
+class ProjectBase(BaseModel):
+    id : str
+    project_title : str
+    number_of_pages: int
+    number_of_projects: int
+    project_boundries : dict[str, int]
+    project_titles : dict[str, str]
+    project_descriptions : dict[str,str]
+    cubicle_count_in_each_project : dict[str,int]
+    unique_info : str
+    design_firm: str
+
 
 
 class CubicleInfo(BaseModel):

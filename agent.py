@@ -1,26 +1,4 @@
-# import asyncio
-# # pyrefly: ignore [missing-import]
-# from claude_agent_sdk import  ClaudeSDKClient, ClaudeAgentOptions , AssistantMessage, TextBlock, ResultMessage
-
-
-# # async with ClaudeSDKClient() as client:
-# #     await client.query('')
-
-
-
-
-# options = ClaudeAgentOptions(
-#     thinking={'type': 'adaptive', "budget_tokens" : 500000},
-#     tools={},
-#     allowed_tools=['Read' ,'Write', 'Bash'],
-#     permission_mode = "acceptEdits" 
-# )
-
-# async def main():
-#     async with ClaudeSDKClient() as client:
-#         await client.query(input(''))
-
-
+import asyncio
 from claude_agent_sdk import ClaudeSDKClient
 from models import ProjectInfo
 import asyncio
@@ -38,105 +16,30 @@ from claude_agent_sdk import (
     tool,
     ClaudeAgentOptions
 )
-
-IMAGE_PATH = WORKSPACE / "__images"
-WORKSPACE   = Path(__file__).parent / "data"
-CROPS_DIR   = WORKSPACE / "__crops"
-SCRATCH_DIR = WORKSPACE / "__scratch"
-
-WORKSPACE.mkdir(exist_ok=True)
-CROPS_DIR.mkdir(exist_ok=True)
-SCRATCH_DIR.mkdir(exist_ok=True)
-
-
-@tool(
-    "crop_region",
-    "Crop a region of a page image at higher effective resolution when text or "
-    "symbols are too small to read clearly. Coordinates are normalized "
-    "fractions of page dimensions (0.0–1.0); (0,0) is the top-left corner. "
-    "If the first crop misses the region, call again with adjusted coordinates.",
-    {
-        "page_image": str,
-        "x": float, "y": float,
-        "width": float, "height": float,
-    },
+from utils import build_prompt
+from tools import image_tools_server
+from directories import (
+    _project_crops_dir,
+    CROPS_DIR,
+    SCRATCH_DIR,
+    WORKSPACE
 )
-async def crop_region(args):
-    from PIL import Image
-    img = Image.open(args["page_image"])
-    W, H = img.size
-    box = (
-        int(args["x"] * W),
-        int(args["y"] * H),
-        int((args["x"] + args["width"]) * W),
-        int((args["y"] + args["height"]) * H),
-    )
-    out_path = CROPS_DIR / f"crop_{uuid.uuid4().hex[:8]}.png"
-    cropped = img.crop(box)
-
-   
-    MAX_DIM = 1600
-    if cropped.width > MAX_DIM or cropped.height > MAX_DIM:
-        cropped.thumbnail((MAX_DIM, MAX_DIM), Image.LANCZOS)
-
-    cropped.save(out_path, format="PNG", optimize=True)
-
-    buf = base64.b64encode(out_path.read_bytes()).decode()
-    return {
-        "content": [{
-            "type": "image",
-            "data": buf,
-            "mimeType": "image/png",
-        }]
-    }
-
-async def get_images(path: str):
-    pass
+from tasks import Task
 
 
-image_tools_server = create_sdk_mcp_server("image_tools", tools=[crop_region])
+async def main(project_name: str, gate: str , cwd: Path):
+    global _project_crops_dir
 
-MAX_ATTEMPTS = 3
-SCHEMA_DESCRIPTION = """
-{
-  "project_title": "string",
-  "design_firm": "string",
-  "date": "int",
-  "cubicle_info": [
-    {
-      "cubicle_name": "string",
-      "power_specification": "string",
-      "cubicle_type": "string"
-    }
-  ],
-  "cubicle_count": integer,
-  "project_location": "string",
-  "transformer_count": integer,
-  "transformers": [
-    {
-      "power_rating_kva": number or null,
-      "primary_voltage_kv": number or null,
-      "secondary_voltage_v": number or null,
-      "specifications": "string or null"
-    }
-  ],
-  "confidence": "high | medium | low"
-}
-"""
+    project_crops_dir   = CROPS_DIR   / project_name
+    project_scratch_dir = SCRATCH_DIR / project_name
+    project_crops_dir.mkdir(exist_ok=True)
+    project_scratch_dir.mkdir(exist_ok=True)
 
-BASE_PROMPT = (
-    f"Read the image at {IMAGE_PATH}. "
-    "This is an electrical cubicle panel drawing. "
-    "Perform an extraction on this image and retrieve the following:\n"
-    "1. Project title\n"
-    "2. How many cubicles or electrical boards are planned in this project\n"
-    "3. Number of transformers used along with their power rating and specifications.\n"
-    f"Schema to follow:\n{SCHEMA_DESCRIPTION}\n"
-    "Return ONLY a raw JSON object matching the schema. No markdown fences, no explanation."
-)
+    _project_crops_dir = project_crops_dir
 
+    # base_prompt = build_prompt(image_path) # this needs to change to the task prompt 
+    base_prompt = Task.prompt # this needs to change to the task prompt 
 
-async def main():
     options = ClaudeAgentOptions(
         mcp_servers={"image_tools": image_tools_server},
         allowed_tools=["Read", "mcp__image_tools__crop_region"],
@@ -144,15 +47,16 @@ async def main():
         max_turns=20,
         max_buffer_size=10*1024*1024,
         thinking={'type': 'adaptive', 'display': 'summarized'},
-        cwd=WORKSPACE,
+        cwd=cwd,
+        can_use_tool=gate
     )
 
     async with ClaudeSDKClient(options=options) as client:
-        current_prompt = BASE_PROMPT
+        current_prompt = base_prompt
 
-        for attempt in range(1, MAX_ATTEMPTS + 1):
+        for attempt in range(1, Task.max_attempts + 1):
             result = ""
-            turn = 0
+            turn = None
             await client.query(current_prompt)
             async for message in client.receive_response():
                 if isinstance(message, AssistantMessage):
@@ -164,7 +68,7 @@ async def main():
                         elif isinstance(block, TextBlock):
                             print(f"[Text]: {block.text}")
                 if isinstance(message, ResultMessage):
-                    result = message.result or ""
+                    result = message.result or "No Result"
                     tokens = message.usage or {}
                     print(f"\n--- Result ---")
                     print(f"Turns: {message.num_turns}")
@@ -173,23 +77,39 @@ async def main():
 
             if not result.strip():
                 print(f"[Attempt {attempt}] Empty result — Claude produced no JSON output.")
-                prompt = f"{BASE_PROMPT}\n\nYour previous response contained no JSON. Return ONLY a raw JSON object."
+                current_prompt = f"{base_prompt}\n\nYour previous response contained no JSON. Return ONLY a raw JSON object."
                 continue
 
             clean = result.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
             try:
                 data = ProjectInfo.model_validate(json.loads(clean))
-                (SCRATCH_DIR / f"{data.project_title}_result_project_info.json{uuid.uuid4.hex[:4]}").write_text(
+                output_dir = (project_scratch_dir / f"result_{project_name}.json").write_text(
                     json.dumps(data.model_dump(), indent=2)
                 )
-                return data
+                if data :
+                    return {
+                        'status': 'sucess',
+                        'result' : data,
+                        "output_dir" : output_dir 
+                    }
+                    continue
+
             except (json.JSONDecodeError, ValidationError) as e:
-                if attempt == MAX_ATTEMPTS:
-                    raise 
-                # RuntimeError(f"Failed after {MAX_ATTEMPTS} attempts. Last error: {e}") from e
+                if attempt == Task.max_attempts:
+                    raise
                 current_prompt = (
-                f"Your previous output failed validation: {e}\n"
-                "Fix it and return only valid JSON matching the schema."
+                    f"Your previous output failed validation: {e}\n"
+                    "Fix it and return only valid JSON matching the schema."
                 )
 
-asyncio.run(main())
+# Test invocation — orchestrator will call main(project_name, image_path) directly.
+# asyncio.run(main("output_1", str(WORKSPACE / "__images" / "output_1" / "page_1.png")))
+
+# if __name__ == '__main__':
+
+#     '''
+#     inputs: 
+#         1. Imagelist from the fastapi endpoint supplied by the orchestrator to the runner script, 
+#         from th runner script it comes to the Agent 
+#     '''
+#     asyncio.run(main())

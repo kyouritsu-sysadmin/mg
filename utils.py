@@ -3,6 +3,9 @@ import fitz
 import base64
 import PIL
 from pathlib import Path
+from schemas import SCHEMA_DESCRIPTION
+
+
 
 def pdf_to_images(pdf_path: str, output_dir: Path, dpi: int):
     doc = fitz.open(pdf_path)
@@ -23,3 +26,16 @@ def pdf_to_images(pdf_path: str, output_dir: Path, dpi: int):
     doc.close()
     print("conversion complete")
     return outputs, base64_images
+
+
+def build_prompt(image_path: str) -> str:
+    return (
+        f"Read the image at {image_path}. "
+        "This is an electrical cubicle panel drawing. "
+        "Perform an extraction on this image and retrieve the following:\n"
+        "1. Project title\n"
+        "2. How many cubicles or electrical boards are planned in this project\n"
+        "3. Number of transformers used along with their power rating and specifications.\n"
+        f"Schema to follow:\n{SCHEMA_DESCRIPTION}\n"
+        "Return ONLY a raw JSON object matching the schema. No markdown fences, no explanation."
+    )
