@@ -2,7 +2,7 @@
 from claude_agent_sdk import (
     tool,
     create_sdk_mcp_server
-    )
+)
 import uuid
 import base64
 from directories import _project_crops_dir
@@ -30,10 +30,9 @@ async def crop_region(args):
         int((args["x"] + args["width"]) * W),
         int((args["y"] + args["height"]) * H),
     )
-    out_path = _project_crops_dir / f"crop_{uuid.uuid4().hex[:8]}.png"
+    out_path = _project_crops_dir.get() / f"crop_{uuid.uuid4().hex[:8]}.png"
     cropped = img.crop(box)
 
-   
     MAX_DIM = 1600
     if cropped.width > MAX_DIM or cropped.height > MAX_DIM:
         cropped.thumbnail((MAX_DIM, MAX_DIM), Image.LANCZOS)
@@ -48,6 +47,7 @@ async def crop_region(args):
             "mimeType": "image/png",
         }]
     }
+
 
 async def get_images(path: str):
     pass

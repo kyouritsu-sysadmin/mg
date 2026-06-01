@@ -1,3 +1,4 @@
+from contextvars import ContextVar
 from pathlib import Path
 
 
@@ -9,6 +10,5 @@ WORKSPACE.mkdir(exist_ok=True)
 CROPS_DIR.mkdir(exist_ok=True)
 SCRATCH_DIR.mkdir(exist_ok=True)
 
-# Set per-job before query; crop_region closes over this variable.
-_project_crops_dir: Path = CROPS_DIR
-
+# Per-task crop output directory — ContextVar is safe under concurrent async tasks.
+_project_crops_dir: ContextVar[Path] = ContextVar("project_crops_dir", default=CROPS_DIR)

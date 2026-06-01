@@ -1,4 +1,3 @@
-from click.types import DateTime
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
@@ -18,6 +17,14 @@ from typing import Optional, Literal
 #     cubicle_material : str
 #     cubicleinfo : List[CubicleInfo]
 
+class ProjectCreate(BaseModel):
+    name: str
+
+class ProjectResponse(BaseModel):
+    project_id: str
+    name: str
+    workspace_path: str
+
 class UserData(BaseModel):
     pass
 
@@ -36,7 +43,6 @@ class ProjectBase(BaseModel):
     cubicle_count_in_each_project : dict[str,int]
     unique_info : str
     design_firm: str
-
 
 
 class CubicleInfo(BaseModel):
