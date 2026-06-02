@@ -1,21 +1,15 @@
+from fields import MaterialsInfo
+from fields import FunctionalExplanation
+from fields import AdditionalSystem
+from fields import Manufacturing_Spec
+from fields import SafetyMeasures
+from fields import LegendInfo
+from fields import EquipmentSpecs
+from fields import PaintingSpec
+from fields import Standards
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
-
-
-# class Confidence(BaseModel):
-#     low : str =  Field(description='Low confidence')
-#     high  : str =  Field(description='High confidence')
-
-# class AgentResponse(BaseModel):
-#     title: str = Field(description='Title of the session mapping to the title')
-#     confidence : Literal["high", "medium", "low"]
-
-# class CubicleReference(BaseModel):
-#     air_vent : Optional[bool] = None
-#     bird_net :  Optional[bool] = None
-#     bird_net_material :  Optional[bool] = None
-#     cubicle_material : str
-#     cubicleinfo : List[CubicleInfo]
+from fields import BuildingOverviewType
 
 class ProjectCreate(BaseModel):
     name: str
@@ -51,9 +45,6 @@ class CubicleInfo(BaseModel):
     cubicle_type : str
 
 
-# class LegendInfo(BaseModel):
-#     symbol : str
-#     name : str
 class TransformerSpec(BaseModel):
     power_rating_kva:   Optional[float] = None
     primary_voltage_kv: Optional[float] = None
@@ -73,3 +64,26 @@ class ProjectInfo(BaseModel):
 
 
 
+
+class ProjectOverview(BaseModel):
+    
+    building_overview : BuildingOverviewType
+
+    standards : Standards
+
+    paint_speciications :PaintingSpec
+
+
+    equipment_specs :EquipmentSpecs
+
+    legend_info : LegendInfo
+
+    safety_measures : SafetyMeasures
+
+    manufacturing_specifications :Manufacturing_Spec
+
+    additional_systems: AdditionalSystem
+
+    functional_explantion: FunctionalExplanation
+
+    materials_information : MaterialsInfo
