@@ -2,7 +2,7 @@ from contextvars import ContextVar
 from pathlib import Path
 
 
-WORKSPACE   = Path(__file__).parent / "data"
+WORKSPACE   = Path(__file__).parent / "workspace"
 CROPS_DIR   = WORKSPACE / "__crops"
 SCRATCH_DIR = WORKSPACE / "__scratch"
 

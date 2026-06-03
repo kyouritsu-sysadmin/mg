@@ -9,7 +9,7 @@ class Task:
     prompt: str
     schema: type[BaseModel]
     target_pages: str = "ALL IMAGES"
-    max_turns: int = 20 
+    max_turns: int = 10 
     max_attempts: int = 3
 
     def base_prompt(self, Imagelist: list[str]) -> str:

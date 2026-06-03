@@ -14,7 +14,7 @@ It uses:
 
 '''
 
-from directories import WORKSPACE, CROPS_DIR
+from directories import WORKSPACE
 import json
 from pydantic import ValidationError
 from claude_agent_sdk import PermissionResultDeny
@@ -29,21 +29,24 @@ from agent import main, run_pipeline_session
 async def gatekeep(tool_name: str | Optional, path: Path | Optional, _context: str | Optional = None):
     if tool_name in ALLOWED_TOOLS:
         return PermissionResultAllow()
-    if path and path.resolve().is_relative_to(CROPS_DIR):
+    if path and path.resolve().is_relative_to(WORKSPACE):
         return PermissionResultAllow()
     return PermissionResultDeny(message='write command denied')
 
 
-async def run_task(task: Task, ImageList: list[str], project_name: str) -> dict:
+async def run_task(task: Task, ImageList: list[str], project_name: str,
+                   system_prompt: str | None = None) -> dict:
     """Single-task runner — creates a fresh agent session per task."""
     try:
         prompt = task.base_prompt(Imagelist=ImageList)
-        return await main(project_name=project_name, Task=task, gate=gatekeep, cwd=WORKSPACE, prompt=prompt)
+        return await main(project_name=project_name, Task=task, gate=gatekeep,
+                          cwd=WORKSPACE, prompt=prompt, system_prompt=system_prompt)
     except (json.JSONDecodeError, ValidationError) as e:
         raise Exception(f'Task "{task.id}" failed after all retries') from e
 
 
-async def run_pipeline(tasks: list[Task], ImageList: list[str], project_name: str) -> list[dict]:
+async def run_pipeline(tasks: list[Task], ImageList: list[str], project_name: str,
+                       system_prompt: str | None = None) -> list[dict]:
     """Multi-task pipeline — all tasks share one session so each task has full
     context from every previous task's conversation turns and results."""
     try:
@@ -53,6 +56,7 @@ async def run_pipeline(tasks: list[Task], ImageList: list[str], project_name: st
             cwd=WORKSPACE,
             tasks=tasks,
             image_list=ImageList,
+            system_prompt=system_prompt,
         )
     except (json.JSONDecodeError, ValidationError) as e:
         raise Exception(f'Pipeline failed: {e}') from e

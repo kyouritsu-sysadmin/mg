@@ -4,7 +4,7 @@ from typing import Annotated
 
 
 BuildingOverviewType = Annotated[
-    str, 
+    str | None, 
     Field(
         description=(
             "Mainly information about the construction site where the cubicles are supposed to be installed. "
@@ -18,7 +18,7 @@ BuildingOverviewType = Annotated[
 
 
 Standards  = Annotated[
-    str,
+    str | None,
     Field(
         description=(
             "Applicable standards, codes and regulations the power receiving / transformation "
@@ -40,7 +40,7 @@ Standards  = Annotated[
     )
 ]
 PaintingSpec = Annotated[
-    str, Field(
+    str | None, Field(
         description=(
             "Paint / coating specification of the metal enclosure (外箱) and panels. Search the "
             "塗装 row of the 仕様表 or the finishing notes. Capture the coating method "
@@ -65,7 +65,7 @@ PaintingSpec = Annotated[
 
 
 EquipmentSpecs = Annotated[
-    str, Field(
+    str| None, Field(
         description=(
             "Ratings and specifications of the individual electrical devices housed in the "
             "cubicle, taken from the 各機器仕様 table and the single line diagram (単線結線図). "
@@ -87,7 +87,7 @@ EquipmentSpecs = Annotated[
 ]
 
 LegendInfo = Annotated[
-    str, Field(
+    str| None, Field(
     description=(
         "The symbol legend (凡例) table printed on the single line diagram, mapping each "
         "drawing 記号 (symbol / abbreviation) to its 名称 (component name). Extract the full "
@@ -110,13 +110,13 @@ LegendInfo = Annotated[
 ]
 
 SafetyMeasures = Annotated[
-    str, Field(
+    str| None, Field(
         description=(
             "Protective and safety measures for the installation. Look across the spec notes "
             "and姿図 (layout figures) for: earthquake / seismic resistance (耐震, 重要度係数, "
             "アンカーボルト・基礎ボルト固定), disaster & fire prevention (防災 / 防火), bird-damage netting "
             "(鳥害ネット / 鳥よけ網), tip-over / fall prevention (転倒防止), lightning & surge protection "
-            "(避雷器 / SPD), and grounding / earthing works (接地工事 A種・D種, インターロック)."
+            "(避雷器 / SPD), and grounding / earthing works (接地工事 A種・D種, インターンロック)."
         ),
     examples=[
         {
@@ -126,13 +126,14 @@ SafetyMeasures = Annotated[
             "fall_prevention": "転倒防止アンカー固定",
             "surge_protection": "SPD (避雷器) 設置 クラスI",
             "grounding": "接地工事 A種・D種",
+            "salt_resistance_system" : "【耐塩ﾌｨﾙﾀｰ】"       
         }
     ]
     )
 ]
 
 Manufacturing_Spec = Annotated[
-    str,  Field(
+    str| None,  Field(
     description=(
         "Fabrication / construction specification of the cubicle enclosure itself, from the "
         "製作仕様 notes and the reference figure (参考姿図). Capture the enclosure type "
@@ -154,7 +155,7 @@ Manufacturing_Spec = Annotated[
 ]
 
 AdditionalSystem= Annotated[
-    str, Field (
+    str| None, Field (
     description= (
         "Supplementary or connected systems beyond the core receiving equipment. Search for "
         "太陽光発電設備 (PV / solar) and its パワーコンディショナ (PCS, power conditioner), 蓄電池 "
@@ -173,7 +174,7 @@ AdditionalSystem= Annotated[
 ]
 
 FunctionalExplanation= Annotated[
-    str, Field(
+    str| None, Field(
     description=(
         "Functional / operational description of how the equipment behaves. Capture protection "
         "relay operation (保護継電器: 過電流継電器 OCR, 地絡方向継電器 DGR, 不足電圧継電器 UVR, 過電圧継電器 OVR), "
@@ -192,7 +193,7 @@ FunctionalExplanation= Annotated[
 ]
 
 MaterialsInfo  = Annotated [
-    str, Field(
+    str| None, Field(
     description= (
         "Materials of the wiring and conductive components. Capture high-voltage cables "
         "(高圧ケーブル CV / CVT with size, e.g. 6.6kV 38sq), low-voltage cables (低圧ケーブル CV 600V), "

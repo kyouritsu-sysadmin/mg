@@ -20,7 +20,7 @@ from directories import (
 from tasks import Task
 
 
-def _options(gate, cwd: Path, max_turns: int) -> ClaudeAgentOptions:
+def _options(gate, cwd: Path, max_turns: int, system_prompt: str | None = None) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         mcp_servers={"image_tools": image_tools_server},
         allowed_tools=["Read", "mcp__image_tools__crop_region"],
@@ -29,7 +29,8 @@ def _options(gate, cwd: Path, max_turns: int) -> ClaudeAgentOptions:
         max_buffer_size=10 * 1024 * 1024,
         thinking={'type': 'adaptive'},
         cwd=cwd,
-        can_use_tool=gate
+        can_use_tool=gate,
+        system_prompt=system_prompt,
     )
 
 
@@ -93,7 +94,8 @@ async def run_turns(
     raise RuntimeError(f'Task "{task.id}" produced no valid output after {task.max_attempts} attempts.')
 
 
-async def main(project_name: str, gate, cwd: Path, Task: Task, prompt: str) -> dict:
+async def main(project_name: str, gate, cwd: Path, Task: Task, prompt: str,
+               system_prompt: str | None = None) -> dict:
     """Single-task entry point — creates a fresh session for one task."""
     project_crops_dir   = CROPS_DIR   / project_name
     project_scratch_dir = SCRATCH_DIR / project_name
@@ -102,7 +104,7 @@ async def main(project_name: str, gate, cwd: Path, Task: Task, prompt: str) -> d
 
     token = _project_crops_dir.set(project_crops_dir)
     try:
-        async with ClaudeSDKClient(options=_options(gate, cwd, Task.max_turns)) as client:
+        async with ClaudeSDKClient(options=_options(gate, cwd, Task.max_turns, system_prompt)) as client:
             return await run_turns(client, Task, prompt, project_scratch_dir, project_name)
     finally:
         _project_crops_dir.reset(token)
@@ -114,6 +116,7 @@ async def run_pipeline_session(
     cwd: Path,
     tasks: list[Task],
     image_list: list[str],
+    system_prompt: str | None = None,
 ) -> list[dict]:
     """Multi-task entry point — one session shared across all tasks in sequence.
 
@@ -128,7 +131,7 @@ async def run_pipeline_session(
     token = _project_crops_dir.set(project_crops_dir)
     try:
         total_turns = sum(t.max_turns for t in tasks)
-        async with ClaudeSDKClient(options=_options(gate, cwd, total_turns)) as client:
+        async with ClaudeSDKClient(options=_options(gate, cwd, total_turns, system_prompt)) as client:
             results = []
             prev_result = None
             for i, task in enumerate(tasks):

@@ -39,3 +39,6 @@ def build_prompt(image_path: str) -> str:
         f"Schema to follow:\n{SCHEMA_DESCRIPTION}\n"
         "Return ONLY a raw JSON object matching the schema. No markdown fences, no explanation."
     )
+
+
+

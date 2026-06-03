@@ -7,7 +7,7 @@ from fields import LegendInfo
 from fields import EquipmentSpecs
 from fields import PaintingSpec
 from fields import Standards
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, Literal
 from fields import BuildingOverviewType
 
@@ -26,6 +26,8 @@ class SessionData(BaseModel):
     project_name: str
     project_description : str | Optional[None]
     
+
+# task : project_exploration
 class ProjectBase(BaseModel):
     id : str
     project_title : str
@@ -39,10 +41,9 @@ class ProjectBase(BaseModel):
     design_firm: str
 
 
-class CubicleInfo(BaseModel):
-    cubicle_name: str
-    power_specification : str
-    cubicle_type : str
+# equipment listing 
+class EquipmentList(BaseModel):
+    results : list[dict]
 
 
 class TransformerSpec(BaseModel):
@@ -50,8 +51,36 @@ class TransformerSpec(BaseModel):
     primary_voltage_kv: Optional[float] = None
     secondary_voltage_v: Optional[float] = None
     specifications:     Optional[str]   = None
+    meters:  list[dict[str, str]] | None = None
 
+class CubicleInfo(BaseModel):
+    cubicle_name: str
+    power_specification : str
+    cubicle_type : str
+    meters : list[dict[str, str]] | None = None
+    ct_scanners : list[dict[str, str]] | None = None
+    lbs : dict[str, str] | None = None 
+
+
+class BreakerList(BaseModel):
+    cubicle_name : str
+    cubicle_type: str
+    transformer : str
+    type : str
+    poles : int 
+    af : str |None
+    at : str | None 
+    main_line_number : str 
+    load_name : str | None
+    capacity: str
+    switch_capacity: str 
+    main_line_size : str | None
+    remarks : str | None
+
+
+# equipment_extraction
 class ProjectInfo(BaseModel):
+
     project_title : str
     design_firm : str 
     date: int
@@ -59,31 +88,22 @@ class ProjectInfo(BaseModel):
     cubicle_count : int
     project_location: str
     transformer_count: int
-    transformers:      list[TransformerSpec]
-    confidence:        Literal["high", "medium", "low"]
+    transformers: list[TransformerSpec]
+    breakerlist : list[BreakerList]
+    confidence: Literal["high", "medium", "low"]
 
 
 
-
+# project_overview 
 class ProjectOverview(BaseModel):
-    
-    building_overview : BuildingOverviewType
 
-    standards : Standards
-
-    paint_speciications :PaintingSpec
-
-
-    equipment_specs :EquipmentSpecs
-
-    legend_info : LegendInfo
-
-    safety_measures : SafetyMeasures
-
-    manufacturing_specifications :Manufacturing_Spec
-
-    additional_systems: AdditionalSystem
-
-    functional_explantion: FunctionalExplanation
-
-    materials_information : MaterialsInfo
+    building_overview : BuildingOverviewType | None = None
+    standards : Standards | None = None
+    paint_specifications :PaintingSpec| None = None
+    equipment_specs :EquipmentSpecs| None = None
+    legend_info : LegendInfo| None = None
+    safety_measures : SafetyMeasures | None = None
+    manufacturing_specifications :Manufacturing_Spec | None = None
+    additional_systems: AdditionalSystem| None = None
+    functional_explantion: FunctionalExplanation| None = None
+    materials_information : MaterialsInfo| None = None
