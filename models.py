@@ -1,3 +1,4 @@
+from fields import MetersInfo
 from fields import MaterialsInfo
 from fields import FunctionalExplanation
 from fields import AdditionalSystem
@@ -46,36 +47,45 @@ class EquipmentList(BaseModel):
     results : list[dict]
 
 
+class Meters(BaseModel):
+    cubicle_name: str
+    context: Literal["HV_cubicle", "LV_breaker"]
+    meters_info: MetersInfo = None
+
+
 class TransformerSpec(BaseModel):
-    power_rating_kva:   Optional[float] = None
-    primary_voltage_kv: Optional[float] = None
-    secondary_voltage_v: Optional[float] = None
-    specifications:     Optional[str]   = None
-    meters:  list[dict[str, str]] | None = None
+    power_rating_kva:    float | None = None
+    primary_voltage_kv:  float | None = None
+    secondary_voltage_v: float | None = None
+    specifications:      str   | None = None
+    meters:              list[Meters] | None = None
+
 
 class CubicleInfo(BaseModel):
     cubicle_name: str
-    power_specification : str
-    cubicle_type : str
-    meters : list[dict[str, str]] | None = None
-    ct_scanners : list[dict[str, str]] | None = None
-    lbs : dict[str, str] | None = None 
+    power_specification: str
+    cubicle_type: str
+    meters: list[Meters] | None = None
+    ct_scanners: list[dict[str, str]] | None = None
+    lbs: dict[str, str] | None = None
 
 
 class BreakerList(BaseModel):
-    cubicle_name : str
+    cubicle_name: str
     cubicle_type: str
-    transformer : str
-    type : str
-    poles : int 
-    af : str |None
-    at : str | None 
-    main_line_number : str 
-    load_name : str | None
+    transformer: str
+    meters: Meters | None = None
+    type: str
+    poles: int
+    af: str | None = None
+    at: str | None = None
+    main_line_number: str
+    load_name: str | None = None
     capacity: str
-    switch_capacity: str 
-    main_line_size : str | None
-    remarks : str | None
+    switch_capacity: str
+    main_line_size: str | None = None
+    remarks: str | None = None
+    
 
 
 # equipment_extraction
@@ -83,7 +93,7 @@ class ProjectInfo(BaseModel):
 
     project_title : str
     design_firm : str 
-    date: int
+    date: str | None = None
     cubicle_info : list[CubicleInfo]
     cubicle_count : int
     project_location: str
@@ -107,3 +117,10 @@ class ProjectOverview(BaseModel):
     additional_systems: AdditionalSystem| None = None
     functional_explantion: FunctionalExplanation| None = None
     materials_information : MaterialsInfo| None = None
+
+
+class CubicleDimensions(BaseModel):
+
+    cubicle_name: str
+    
+    

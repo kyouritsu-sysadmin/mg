@@ -55,4 +55,4 @@ async def get_images(path: str):
 
 image_tools_server = create_sdk_mcp_server("image_tools", tools=[crop_region])
 
-ALLOWED_TOOLS = ['Read', "Bash", "Write"]
+ALLOWED_TOOLS = ['Read', 'mcp__image_tools__crop_region', 'crop_region']

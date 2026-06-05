@@ -35,9 +35,118 @@ main{max-width:700px;margin:1.75rem auto;padding:0 1rem;display:flex;flex-direct
 .thumbs img{height:96px;width:auto;border-radius:5px;border:1px solid #e2e8f0;object-fit:cover;transition:transform .15s,box-shadow .15s;cursor:zoom-in}
 .thumbs img:hover{transform:scale(1.07);box-shadow:0 4px 14px rgba(0,0,0,.14)}
 .page-count{font-size:.78rem;color:#94a3b8;margin-top:.4rem}
-#status-area{display:none;align-items:center;gap:.6rem;margin-top:.85rem;color:#475569;font-size:.85rem}
+#status-area{display:none;flex-direction:column;gap:1rem;margin-top:1.25rem;color:#475569;font-size:.85rem}
+.status-header{display:flex;align-items:center;gap:.6rem}
 .spin{width:17px;height:17px;border:2.5px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* Stepper Styles */
+.stepper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 1.25rem 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+.step-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border: 2px solid #cbd5e1;
+  transition: all 0.3s ease;
+}
+.step-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: #e2e8f0;
+  margin: 0 -10px;
+  align-self: center;
+  margin-top: -24px; /* offset line to vertical center of icon */
+  transition: all 0.3s ease;
+}
+
+/* Stepper States */
+.step.pending .step-icon {
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+}
+.step.pending .step-label {
+  color: #94a3b8;
+}
+
+.step.running .step-icon {
+  background: #eff6ff;
+  color: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+  animation: pulse-blue 1.5s infinite alternate;
+}
+.step.running .step-label {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.step.completed .step-icon {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #22c55e;
+}
+.step.completed .step-label {
+  color: #166534;
+}
+
+.step.failed .step-icon {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #ef4444;
+}
+.step.failed .step-label {
+  color: #991b1b;
+}
+
+/* Filled line between completed/running steps */
+.step-line.active {
+  background: #3b82f6;
+}
+.step-line.completed {
+  background: #22c55e;
+}
+
+@keyframes pulse-blue {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
 #results-area{display:none;margin-top:1rem}
 .err{background:#fef2f2;border:1px solid #fecaca;border-radius:7px;padding:.8rem 1rem;color:#991b1b;font-size:.85rem;margin-top:.85rem}
 .ok{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;padding:.6rem 1rem;color:#166534;font-size:.82rem;margin-bottom:.75rem}
@@ -142,8 +251,31 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
         ⚡ Run Analysis
       </button>
       <div id="status-area">
-        <div class="spin"></div>
-        <span id="status-text">Analyzing document…</span>
+        <div class="status-header">
+          <div class="spin"></div>
+          <span id="status-text">Analyzing document…</span>
+        </div>
+        <div class="stepper" id="stepper">
+          <div class="step pending" id="step-project_exploration">
+            <div class="step-icon">1</div>
+            <div class="step-label">Project Exploration</div>
+          </div>
+          <div class="step-line" id="line-project_exploration"></div>
+          <div class="step pending" id="step-project_overview">
+            <div class="step-icon">2</div>
+            <div class="step-label">Project Overview</div>
+          </div>
+          <div class="step-line" id="line-project_overview"></div>
+          <div class="step pending" id="step-equipment_extraction">
+            <div class="step-icon">3</div>
+            <div class="step-label">Equipment Extraction</div>
+          </div>
+          <div class="step-line" id="line-equipment_extraction"></div>
+          <div class="step pending" id="step-equipment_listing">
+            <div class="step-icon">4</div>
+            <div class="step-label">Equipment Listing</div>
+          </div>
+        </div>
       </div>
       <div id="results-area"></div>
     </div>
@@ -180,6 +312,62 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
     });
   }
 
+  const taskOrder = [
+    'project_exploration',
+    'project_overview',
+    'equipment_extraction',
+    'equipment_listing'
+  ];
+
+  function updateStepper(job) {
+    const activeTask = job.active_task;
+    const results = (job.results && job.results.results) || [];
+    const completedTasks = results.map(r => r.task_id);
+    
+    taskOrder.forEach((taskId, index) => {
+      const stepEl = document.getElementById('step-' + taskId);
+      if (!stepEl) return;
+      
+      const iconEl = stepEl.querySelector('.step-icon');
+      
+      // Determine state
+      let state = 'pending';
+      let iconHtml = index + 1;
+      
+      const isCompleted = completedTasks.includes(taskId);
+      const isFailed = results.some(r => r.task_id === taskId && r.status === 'failed');
+      
+      if (isCompleted) {
+        state = 'completed';
+        iconHtml = '✓';
+      } else if (isFailed) {
+        state = 'failed';
+        iconHtml = '✗';
+      } else if (activeTask === taskId || (job.status === 'running' && !activeTask && index === 0)) {
+        state = 'running';
+        iconHtml = '<div class="spin" style="width:14px;height:14px;border-width:2px;border-top-color:#3b82f6;margin:0"></div>';
+      }
+      
+      stepEl.className = 'step ' + state;
+      if (iconEl) iconEl.innerHTML = iconHtml;
+      
+      // Update line color
+      if (index < taskOrder.length - 1) {
+        const lineEl = document.getElementById('line-' + taskId);
+        if (lineEl) {
+          lineEl.className = 'step-line';
+          if (isCompleted) {
+            lineEl.classList.add('completed');
+          } else if (state === 'running' || activeTask === taskOrder[index + 1]) {
+            lineEl.classList.add('active');
+          }
+        }
+      }
+    });
+  }
+
+  let activeTabIdx = 0;
+
   async function startAnalysis() {
     const btn  = document.getElementById('analyze-btn');
     const stat = document.getElementById('status-area');
@@ -189,6 +377,17 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
     stat.style.display = 'flex';
     res.style.display  = 'none';
     res.innerHTML = '';
+    activeTabIdx = 0;
+
+    // Reset stepper display
+    taskOrder.forEach((taskId, index) => {
+      const stepEl = document.getElementById('step-' + taskId);
+      if (stepEl) stepEl.className = 'step pending';
+      const iconEl = stepEl ? stepEl.querySelector('.step-icon') : null;
+      if (iconEl) iconEl.innerHTML = index + 1;
+      const lineEl = document.getElementById('line-' + taskId);
+      if (lineEl) lineEl.className = 'step-line';
+    });
 
     let jobId;
     try {
@@ -207,11 +406,23 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
       try {
         const r   = await fetch('/status/' + jobId);
         const job = await r.json();
-        if (job.status === 'done') {
+        
+        // Update stepper states
+        updateStepper(job);
+        
+        if (job.status === 'running') {
+          // If there are results, show them progressively
+          if (job.results && job.results.results && job.results.results.length > 0) {
+            showResults(job.results);
+          }
+        } else if (job.status === 'done') {
           clearInterval(poll);
           stat.style.display = 'none';
           showResults(job.results);
           btn.disabled = false;
+          // Scroll to results only when finished
+          const root = document.getElementById('results-root');
+          if (root) root.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else if (job.status === 'error') {
           clearInterval(poll);
           stat.style.display = 'none';
@@ -243,16 +454,21 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
     }
     let tabs = '', panels = '';
     items.forEach((r, i) => {
-      const id = r.task_id || ('task' + i), on = i === 0 ? ' active' : '';
+      const id = r.task_id || ('task' + i);
+      const isActive = i === activeTabIdx || (activeTabIdx >= items.length && i === 0);
+      if (isActive) {
+        activeTabIdx = i;
+      }
+      const on = isActive ? ' active' : '';
       tabs   += '<button class="tab' + on + '" id="tab-' + i + '" onclick="showTab(' + i + ')">' + esc(prettyId(id)) + '</button>';
       panels += '<div class="panel' + on + '" id="panel-' + i + '">' + renderTask(id, r.result) + '</div>';
     });
     root.className = 'results-root show';
     root.innerHTML = '<div class="tabs">' + tabs + '</div>' + panels;
-    root.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function showTab(i) {
+    activeTabIdx = i;
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     const t = document.getElementById('tab-' + i), p = document.getElementById('panel-' + i);
@@ -321,20 +537,33 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
   }
 
   function renderListing(d) {
-    const list = (d && d.results) || [], groups = {}, order = [];
-    list.forEach(item => Object.entries(item || {}).forEach(([cub, eq]) => {
-      if (!groups[cub]) { groups[cub] = []; order.push(cub); }
-      groups[cub].push(eq);
-    }));
-    if (!order.length) return '<p class="empty">No equipment list.</p>';
-    let h = '<div class="grid">';
-    order.forEach(cub => {
-      const eqs = groups[cub];
-      h += '<div class="gcard"><div class="cubname"><span>' + esc(cub) +
-        '</span><span class="n">' + eqs.length + '</span></div><ul class="eqlist">' +
-        eqs.map(e => '<li>' + esc(String(e)) + '</li>').join('') + '</ul></div>';
-    });
-    return h + '</div>';
+    const list = (d && d.results) || [];
+    if (!list.length) return '<p class="empty">No equipment list.</p>';
+
+    // Add stats header
+    let h = '<div class="stats">' +
+      stat('Total Items', list.length) +
+      stat('Unique Cubicles', new Set(list.map(x => x.cubicle_name).filter(Boolean)).size) +
+      '</div>';
+
+    const rows = list.map((item, i) => {
+      const cub = item.cubicle_name || '—';
+      const eq = item.equipment || '—';
+      const spec = item.specification || '—';
+      return '<tr>' +
+        '<td style="color:#64748b; font-weight:600; width: 40px; text-align: center;">' + (i + 1) + '</td>' +
+        '<td class="cub">' + esc(cub) + '</td>' +
+        '<td>' + esc(eq) + '</td>' +
+        '<td>' + esc(spec) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return h + '<table class="etable"><thead><tr>' +
+      '<th style="width: 40px; text-align: center;">#</th>' +
+      '<th>Cubicle Name</th>' +
+      '<th>Equipment</th>' +
+      '<th>Specification</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   function renderOverview(d) {

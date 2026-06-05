@@ -37,7 +37,7 @@ Standards  = Annotated[
                 "receiving_voltage": "6.6kV 3φ3W 60Hz",
             }
         ]
-    )
+    ) 
 ]
 PaintingSpec = Annotated[
     str | None, Field(
@@ -213,3 +213,58 @@ MaterialsInfo  = Annotated [
 )
 ]
 
+
+MetersInfo = Annotated[
+    dict | None, Field(
+        description=(
+            "Metering instruments installed in a cubicle or on a breaker feeder row. "
+            "There are two contexts — read both carefully:\n"
+            "\n"
+            "HIGH-VOLTAGE cubicles (受電盤, コンデンサ盤): meters appear as a マルチメータ "
+            "(multi-function meter) entry inside the SLD panel box, listed as a "
+            "comma-separated function set, e.g. 'V×3, MDA×3, W, Var, COSφ, Hz, Wh'. "
+            "Extract each function abbreviation and map it to its full name.\n"
+            "\n"
+            "LOW-VOLTAGE / BREAKER rows (低圧配電盤リスト table): each feeder row has a "
+            "meter column (計器) that contains one or more abbreviation characters "
+            "(e.g. 'A', 'Wh', 'V'). Extract per-row.\n"
+            "\n"
+            "Known meter abbreviations:\n"
+            "  V   = 電圧計 (voltmeter)\n"
+            "  A   = 電流計 (ammeter)\n"
+            "  DA  = デジタル電流計 (digital ammeter)\n"
+            "  MDA = マルチデジタルアナログ表示計 (multi-digital-analog display meter)\n"
+            "  W   = 電力計 (wattmeter)\n"
+            "  Var = 無効電力計 (VAR meter)\n"
+            "  COSφ= 力率計 (power factor meter)\n"
+            "  Hz  = 周波数計 (frequency meter)\n"
+            "  Wh  = 積算電力量計 (watt-hour / energy meter)\n"
+            "  TD  = 変換器 (transducer)\n"
+            "  PQM = 電力品質メータ (power quality meter)\n"
+            "\n"
+            "Return a dict keyed by abbreviation → Japanese full name. "
+            "Add 'meter_spec' only when the drawing explicitly states additional "
+            "specifications (e.g. accuracy class, range, brand)."
+        ),
+        examples=[
+            {
+                "①高圧受電盤": {
+                    "V":    "電圧計",
+                    "DA":   "デジタル電流計",
+                    "MDA":  "マルチデジタルアナログ表示計 ×3",
+                    "W":    "電力計",
+                    "Var":  "無効電力計",
+                    "COSφ": "力率計",
+                    "Hz":   "周波数計",
+                    "Wh":   "積算電力量計",
+                    "meter_spec": "デジアナ表示, マルチメータ一体型"
+                },
+                "③低圧電灯配電盤 No.1 — 主幹ブレーカ": {
+                    "A":  "電流計",
+                    "Wh": "積算電力量計",
+                    "meter_spec": None
+                },
+            }
+        ]
+    )
+]

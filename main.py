@@ -2,6 +2,7 @@ import os
 import shutil
 import uuid
 import asyncio
+import json
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Request, status
 from fastapi.responses import RedirectResponse, FileResponse, JSONResponse
@@ -31,7 +32,61 @@ job_store: dict[str, dict] = {}
 
 async def _run_analysis(job_id: str, image_dir: Path, project_name: str) -> None:
     try:
-        results = await run_agents(ImageListPath=image_dir, Project_name=project_name)
+        def on_event(event: dict):
+            if job_id not in job_store:
+                return
+            job = job_store[job_id]
+            
+            # Update active task
+            if event.get('type') == 'task_start':
+                job['active_task'] = event.get('task_id')
+                
+            # If a task finishes successfully, load its result
+            elif event.get('type') == 'task_end':
+                task_id = event.get('task_id')
+                status = event.get('status')
+                if status == 'success':
+                    output_path_str = event.get('output_path')
+                    if output_path_str:
+                        output_path = Path(output_path_str)
+                        if output_path.exists():
+                            try:
+                                result_data = json.loads(output_path.read_text(encoding='utf-8'))
+                                task_result = {
+                                    'status': 'success',
+                                    'task_id': task_id,
+                                    'result': result_data,
+                                    'output_path': output_path_str
+                                }
+                                # Ensure results structure matches
+                                if 'results' not in job or not isinstance(job['results'], dict):
+                                    job['results'] = {'results': [], 'total_tasks': 4}
+                                
+                                # Update or append
+                                existing = [r for r in job['results']['results'] if r.get('task_id') == task_id]
+                                if not existing:
+                                    job['results']['results'].append(task_result)
+                                else:
+                                    idx = job['results']['results'].index(existing[0])
+                                    job['results']['results'][idx] = task_result
+                            except Exception as e:
+                                print(f"Error loading progressive results: {e}")
+                elif status == 'failed':
+                    task_result = {
+                        'status': 'failed',
+                        'task_id': task_id,
+                        'error': event.get('error', 'Unknown error')
+                    }
+                    if 'results' not in job or not isinstance(job['results'], dict):
+                        job['results'] = {'results': [], 'total_tasks': 4}
+                    existing = [r for r in job['results']['results'] if r.get('task_id') == task_id]
+                    if not existing:
+                        job['results']['results'].append(task_result)
+                    else:
+                        idx = job['results']['results'].index(existing[0])
+                        job['results']['results'][idx] = task_result
+
+        results = await run_agents(ImageListPath=image_dir, Project_name=project_name, on_event=on_event)
         job_store[job_id] = {'status': 'done', 'results': results}
     except Exception as e:
         job_store[job_id] = {'status': 'error', 'message': str(e)}
@@ -82,7 +137,7 @@ async def process_images(request: Request):
     project_images_dir = IMAGES_DIR / project_name
     project_images_dir.mkdir(exist_ok=True)
 
-    image_paths, _ = pdf_to_images(saved_path, project_images_dir, dpi=300)
+    image_paths, _, _page_info = pdf_to_images(saved_path, project_images_dir, dpi=300)
     request.session['image_files'] = [Path(p).name for p in image_paths]
 
     return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)
@@ -104,11 +159,14 @@ async def explore_project(request: Request):
 
     image_dir = IMAGES_DIR / project_name
 
-    # Flaw 6 fix: check the directory has actual images, not just that it exists.
     if not any(image_dir.glob("page_*.png")):
         return JSONResponse({'error': 'No images found. Convert the PDF first.'}, status_code=400)
     job_id = uuid.uuid4().hex
-    job_store[job_id] = {'status': 'running'}
+    job_store[job_id] = {
+        'status': 'running',
+        'active_task': None,
+        'results': {'results': [], 'total_tasks': 4}
+    }
     asyncio.create_task(_run_analysis(job_id, image_dir, project_name))
 
     return JSONResponse({'job_id': job_id, 'status': 'started'})
