@@ -49,9 +49,6 @@ async def crop_region(args):
     }
 
 
-async def get_images(path: str):
-    pass
-
 
 image_tools_server = create_sdk_mcp_server("image_tools", tools=[crop_region])
 

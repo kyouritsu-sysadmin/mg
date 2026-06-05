@@ -99,12 +99,21 @@ async def main_page(request: Request):
     file_path    = request.session.get('file_path')
     image_files  = request.session.get('image_files', [])
     project_name = request.session.get('project_name', '')
+
+    page_labels: dict[str, str] = {}
+    if image_files and project_name:
+        labels_file = IMAGES_DIR / project_name / "page_labels.json"
+        if labels_file.exists():
+            for entry in json.loads(labels_file.read_text(encoding="utf-8")):
+                page_labels[Path(entry["path"]).name] = entry["label"]
+
     return templates.TemplateResponse(request, "index.html", {
         "has_file":     bool(file_path),
         "has_images":   bool(image_files),
         "filename":     Path(file_path).name if file_path else "",
         "project_name": project_name,
         "image_files":  image_files,
+        "page_labels":  page_labels,
     })
 
 

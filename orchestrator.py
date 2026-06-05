@@ -12,8 +12,6 @@ from runner import run_pipeline
 from utils import LABEL_SPEC_OVERVIEW, LABEL_SLD, LABEL_BREAKER_LIST
 from directories import _log_writer, make_log_writer, SCRATCH_DIR
 
-
-
 _RULES_PATH = Path(__file__).parent / "rules.md"
 ESTIMATION_RULES = (
     _RULES_PATH.read_text(encoding="utf-8").strip() if _RULES_PATH.exists() else ""
@@ -69,7 +67,7 @@ BASE_TASKS = [
         and an approximate cubicle count per project. Populate ProjectBase.
         """),
         target_pages="ALL IMAGES",
-        page_types=[],                  # needs every page — no filter
+        page_types=[],                
         schema=ProjectBase,
         max_turns=5,
         max_attempts=2

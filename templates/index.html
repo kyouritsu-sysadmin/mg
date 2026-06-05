@@ -181,6 +181,22 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
 .eqlist li:last-child{border-bottom:none}
 .eqlist li:before{content:"▸";position:absolute;left:0;color:#94a3b8}
 .empty{color:#94a3b8;font-size:.85rem;padding:.5rem 0}
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 4px;
+  line-height: 1;
+}
+.badge-yes {
+  background: #dcfce7;
+  color: #15803d;
+}
+.badge-no {
+  background: #f1f5f9;
+  color: #64748b;
+}
 </style>
 {% endraw %}
 </head>
@@ -227,12 +243,15 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
     </div>
     <div class="card-body">
       <form action="/image" method="post">
-        <button type="submit" class="btn btn-blue" {% if not has_file %}disabled{% endif %}>🖼 Convert PDF to Images</button>
+        <button type="submit" class="btn btn-blue" {% if not has_file or has_images %}disabled{% endif %}>🖼 Convert PDF to Images</button>
       </form>
       {% if has_images %}
       <div class="thumbs">
         {% for f in image_files %}
-        <img src="/preview/{{ project_name }}/{{ f }}" title="Page {{ loop.index }}" loading="lazy" />
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.25rem">
+          <img src="/preview/{{ project_name }}/{{ f }}" title="Page {{ loop.index }} — {{ page_labels.get(f, 'unknown') }}" loading="lazy" />
+          <span style="font-size:.65rem;color:#64748b;background:#f1f5f9;border-radius:4px;padding:.1rem .35rem;white-space:nowrap">{{ page_labels.get(f, 'unknown') }}</span>
+        </div>
         {% endfor %}
       </div>
       <p class="page-count">{{ image_files | length }} page(s)</p>
@@ -243,7 +262,7 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
   <!-- Step 3: Analyze -->
   <div class="card {% if not has_images %}muted{% endif %}">
     <div class="card-head">
-      <span class="badge">3</span>
+      <span class="badge" id="badge-step3">3</span>
       <h2>Run Analysis</h2>
     </div>
     <div class="card-body">
@@ -321,7 +340,8 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
 
   function updateStepper(job) {
     const activeTask = job.active_task;
-    const results = (job.results && job.results.results) || [];
+    // results is [[grp1_tasks…], [grp2_tasks…]] — flatten to get individual task dicts
+    const results = ((job.results && job.results.results) || []).flat();
     const completedTasks = results.map(r => r.task_id);
     
     taskOrder.forEach((taskId, index) => {
@@ -420,6 +440,8 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
           stat.style.display = 'none';
           showResults(job.results);
           btn.disabled = false;
+          const b3 = document.getElementById('badge-step3');
+          if (b3) { b3.classList.add('done'); b3.textContent = '✓'; }
           // Scroll to results only when finished
           const root = document.getElementById('results-root');
           if (root) root.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -446,7 +468,8 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
 
   function showResults(results) {
     const root  = document.getElementById('results-root');
-    const items = ((results && results.results) || []).filter(r => r && r.result);
+    // results.results is [[grp1_tasks…], [grp2_tasks…]] — flatten before filtering
+    const items = ((results && results.results) || []).flat().filter(r => r && r.result);
     if (!items.length) {
       root.className = 'results-root show';
       root.innerHTML = '<p class="empty">No data extracted.</p>';
@@ -521,19 +544,27 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
     }
     const cubs = d.cubicle_info || [];
     if (!cubs.length) return h + '<p class="empty">No cubicles.</p>';
-    const rows = cubs.map(c => {
-      const t = c.transformer_list || {};
-      const tspec = t.specifications || [
-        t.power_rating_kva   && (t.power_rating_kva + 'kVA'),
-        t.primary_voltage_kv && (t.primary_voltage_kv + 'kV'),
-        t.secondary_voltage_v && (t.secondary_voltage_v + 'V')
-      ].filter(Boolean).join(' ') || '—';
-      return '<tr><td class="cub">' + esc(c.cubicle_name || '') + '</td><td>' +
-        esc(c.power_specification || '') + '</td><td>' + esc(c.cubicle_type || '') +
-        '</td><td>' + esc(tspec) + '</td></tr>';
-    }).join('');
-    return h + '<table class="etable"><thead><tr><th>Cubicle</th><th>Power Specification</th>' +
-      '<th>Type</th><th>Transformer</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    const cubRows = cubs.map(c =>
+      '<tr><td class="cub">' + esc(c.cubicle_name || '') + '</td><td>' +
+      esc(c.power_specification || '') + '</td><td>' + esc(c.cubicle_type || '') + '</td></tr>'
+    ).join('');
+    let out = h + '<table class="etable"><thead><tr><th>Cubicle</th>' +
+      '<th>Power Specification</th><th>Type</th></tr></thead><tbody>' + cubRows + '</tbody></table>';
+    const trs = d.transformers || [];
+    if (trs.length) {
+      const trRows = trs.map(t => {
+        const spec = [
+          t.power_rating_kva    && (t.power_rating_kva + ' kVA'),
+          t.primary_voltage_kv  && (t.primary_voltage_kv + ' kV'),
+          t.secondary_voltage_v && (t.secondary_voltage_v + ' V'),
+          t.specifications
+        ].filter(Boolean).join(' / ') || '—';
+        return '<tr><td>' + esc(spec) + '</td></tr>';
+      }).join('');
+      out += '<h5 style="margin:.9rem 0 .4rem;font-size:.7rem;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.04em">Transformers</h5>' +
+        '<table class="etable"><thead><tr><th>Specification</th></tr></thead><tbody>' + trRows + '</tbody></table>';
+    }
+    return out;
   }
 
   function renderListing(d) {
@@ -548,13 +579,19 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
 
     const rows = list.map((item, i) => {
       const cub = item.cubicle_name || '—';
-      const eq = item.equipment || '—';
-      const spec = item.specification || '—';
+      const eq = item.equipment_name || item.equipment || '—';
+      const spec = item.specs || item.specification || '—';
+      const qty = (item.quantity !== undefined && item.quantity !== null) ? item.quantity : '—';
+      const supplied = (item.supplied_by_customer !== undefined && item.supplied_by_customer !== null)
+        ? (item.supplied_by_customer ? '<span class="badge badge-yes">Yes</span>' : '<span class="badge badge-no">No</span>')
+        : '—';
       return '<tr>' +
         '<td style="color:#64748b; font-weight:600; width: 40px; text-align: center;">' + (i + 1) + '</td>' +
         '<td class="cub">' + esc(cub) + '</td>' +
         '<td>' + esc(eq) + '</td>' +
         '<td>' + esc(spec) + '</td>' +
+        '<td style="text-align: center;">' + esc(qty) + '</td>' +
+        '<td style="text-align: center;">' + supplied + '</td>' +
         '</tr>';
     }).join('');
 
@@ -563,6 +600,8 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
       '<th>Cubicle Name</th>' +
       '<th>Equipment</th>' +
       '<th>Specification</th>' +
+      '<th style="width: 80px; text-align: center;">Qty</th>' +
+      '<th style="width: 150px; text-align: center;">Customer Supplied</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
