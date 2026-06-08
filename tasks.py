@@ -49,3 +49,10 @@ class Task:
             f"No prose, no markdown fences.\n"
             f"Schema:\n{json.dumps(self.schema.model_json_schema(), indent=2, ensure_ascii=False)}"
         )
+    
+    def filter_pages(self, image_list : list[dict]):
+
+        if not self.page_types: 
+            return image_list
+        
+        return [img for img in image_list if img['label'] in self.page_types]

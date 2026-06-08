@@ -1,6 +1,5 @@
 # pyrefly: ignore [missing-import]
 import fitz
-import base64
 import json
 
 from pathlib import Path
@@ -74,18 +73,17 @@ def _classify_page(page: fitz.Page) -> str:
 
 def pdf_to_images(
     pdf_path: str, output_dir: Path, dpi: int
-) -> tuple[list[Path], list[str], list[dict]]:
+) -> tuple[list[Path], list[dict]]:
     """Convert PDF pages to PNG images, classifying each page.
 
     Returns:
-        outputs       : list of saved PNG paths
-        base64_images : base64-encoded image strings (same order)
-        page_info     : list of dicts {path, page_number, label}
-                        Also written to <output_dir>/page_labels.json for caching.
+        outputs   : list of saved PNG paths
+        page_info : list of dicts {path, page_number, label}
+                    Also written to <output_dir>/page_labels.json for caching.
+    Base64 encoding happens at agent level (agent.py:_image_message) only.
     """
     doc = fitz.open(pdf_path)
     outputs: list[Path] = []
-    base64_images: list[str] = []
     page_info: list[dict] = []
 
     for page_num in range(len(doc)):
@@ -93,9 +91,6 @@ def pdf_to_images(
         label = _classify_page(page)
 
         pix = page.get_pixmap(dpi=dpi)
-        image_bytes = pix.tobytes("png")
-        base64_images.append(base64.b64encode(image_bytes).decode("utf-8"))
-
         output = output_dir / f"page_{page_num + 1}.png"
         pix.save(str(output))
         outputs.append(output)
@@ -116,5 +111,13 @@ def pdf_to_images(
     )
     doc.close()
     print("conversion complete")
-    return outputs, base64_images, page_info
+    return outputs, page_info
 
+
+
+if __name__ == '__main__':
+
+    path = Path('workspace/__scratch')
+    images = pdf_to_images(pdf_path='data/__originals/見積④.pdf', output_dir=path, dpi=300)
+
+    print(images)

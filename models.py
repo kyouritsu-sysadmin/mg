@@ -43,9 +43,17 @@ class ProjectBase(BaseModel):
 
 
 # equipment listing 
-class EquipmentList(BaseModel):
-    results : list[dict]
+class EquipmentRows(BaseModel):
+    cubicle_id:     str | None = None
+    cubicle_name:   str
+    equipment_name: str
+    specification:  str | None = None
+    quantity:       int
+    remarks:        str | None = None
 
+
+class EquipmentList(BaseModel):
+    results: list[EquipmentRows]
 
 class Meters(BaseModel):
     cubicle_name: str
@@ -62,6 +70,7 @@ class TransformerSpec(BaseModel):
 
 
 class CubicleInfo(BaseModel):
+    cubicle_id : int
     cubicle_name: str
     power_specification: str
     cubicle_type: str
@@ -71,6 +80,7 @@ class CubicleInfo(BaseModel):
 
 
 class BreakerList(BaseModel):
+    cubicle_id : int
     cubicle_name: str
     cubicle_type: str
     transformer: str
@@ -96,6 +106,7 @@ class ProjectInfo(BaseModel):
     date: str | None = None
     cubicle_info : list[CubicleInfo]
     cubicle_count : int
+    cubicle_id : int
     project_location: str
     transformer_count: int
     transformers: list[TransformerSpec]
@@ -121,6 +132,7 @@ class ProjectOverview(BaseModel):
 
 class CubicleDimensions(BaseModel):
 
+    cubicle_id : int
     cubicle_name: str
     
     

@@ -30,3 +30,5 @@ def make_log_writer(log_path: Path) -> Callable[[dict], None]:
         with log_path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
     return write
+
+

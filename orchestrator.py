@@ -126,7 +126,6 @@ BASE_TASKS = [
 
 ]
 
-
 async def run_agents(ImageListPath: Path, Project_name: str | None, tasks: list[Task] = BASE_TASKS,
                      on_event: Callable[[dict], None] | None = None):
     project_name = Project_name or "New project"
@@ -150,6 +149,7 @@ async def run_agents(ImageListPath: Path, Project_name: str | None, tasks: list[
 
     # One shared log file for the entire run — both pipeline groups write to it.
     # Set before asyncio.gather so both tasks inherit the ContextVar via context copy.
+    
     project_scratch = SCRATCH_DIR / project_name
     project_scratch.mkdir(exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -170,30 +170,36 @@ async def run_agents(ImageListPath: Path, Project_name: str | None, tasks: list[
          "total_tasks": len(tasks), "pages": len(image_list),
          "log_file": str(log_path)})
 
-    grp_01 = [t for t in tasks if t.group == 1]
-    grp_02 = [t for t in tasks if t.group == 2]
+    # grp_01 = [t for t in tasks if t.group == 1]
+    # grp_02 = [t for t in tasks if t.group == 2]
 
     try:
         
-        result_01 = await asyncio.gather(
-            run_pipeline(tasks=grp_01, ImageList=image_list,
-                         project_name=project_name, system_prompt=COMMON_RULES),
+        # result_01 = await asyncio.gather(
+        #     run_pipeline(tasks=grp_01, ImageList=image_list,
+        #                  project_name=project_name, system_prompt=COMMON_RULES),
             
-        )
-        result_02 = await asyncio.gather(
-            run_pipeline(tasks=grp_02, ImageList=image_list,
+        # )
+        # result_02 = await asyncio.gather(
+        #     run_pipeline(tasks=grp_02, ImageList=image_list,
+        #                  project_name=project_name, system_prompt=COMMON_RULES),
+        # )
+        
+        
+        results = await asyncio.gather(
+            run_pipeline(tasks=BASE_TASKS, ImageList=image_list,
                          project_name=project_name, system_prompt=COMMON_RULES),
         )
-
+    
         log({"type": "run_end", "project": project_name, "status": "success"})
         
-        flat_results = []
-        if result_01 and isinstance(result_01, list) and len(result_01) > 0:
-            flat_results.extend(result_01[0])
-        if result_02 and isinstance(result_02, list) and len(result_02) > 0:
-            flat_results.extend(result_02[0])
+        # flat_results = []
+        # if result_01 and isinstance(result_01, list) and len(result_01) > 0:
+        #     flat_results.extend(result_01[0])
+        # if result_02 and isinstance(result_02, list) and len(result_02) > 0:
+        #     flat_results.extend(result_02[0])
 
-        return {"results": flat_results, "total_tasks": len(tasks)}
+        return {"results": results, "total_tasks": len(tasks)}
     except Exception as e:
         log({"type": "run_end", "project": project_name, "status": "error", "error": str(e)})
         raise

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -36,12 +37,13 @@ async def _image_message(
     """
     content: list[dict] = []
     for i, img in enumerate(image_list):
+        raw = await asyncio.to_thread(Path(img["path"]).read_bytes)
         block: dict = {
             "type": "image",
             "source": {
                 "type": "base64",
                 "media_type": "image/png",
-                "data": base64.standard_b64encode(Path(img["path"]).read_bytes()).decode(),
+                "data": base64.standard_b64encode(raw).decode(),
             },
         }
         if i == len(image_list) - 1:
@@ -120,7 +122,7 @@ async def run_turns(
                      "num_turns": message.num_turns, "cost_usd": message.total_cost_usd,
                      "input_tokens": tokens.get("input_tokens"),
                      "output_tokens": tokens.get("output_tokens")})
-
+ 
         if not result.strip():
             print(f"[Attempt {attempt}] Empty result — Claude produced no output.")
             log({"type": "retry", "task_id": task.id, "attempt": attempt,
@@ -171,7 +173,7 @@ async def main(project_name: str, gate, cwd: Path, Task: Task,
     token = _project_crops_dir.set(project_crops_dir)
     try:
         async with ClaudeSDKClient(options=_options(gate, cwd, Task.max_turns, system_prompt)) as client:
-            prompt = _image_message(image_list, Task.base_prompt_text(image_list))
+            prompt = _image_message(Task.filter_pages(image_list), Task.base_prompt_text(image_list))
             return await run_turns(client, Task, prompt, project_scratch_dir, project_name)
     finally:
         _project_crops_dir.reset(token)
@@ -205,7 +207,7 @@ async def run_pipeline_session(
             prev_result = None
             for i, task in enumerate(tasks):
                 if i == 0:
-                    prompt = _image_message(image_list, task.base_prompt_text(image_list))
+                    prompt = _image_message(task.filter_pages(image_list), task.base_prompt_text(image_list))
                 else:
                     prompt = task.continuation(prev_result)
                 result = await run_turns(client, task, prompt, project_scratch_dir, project_name)

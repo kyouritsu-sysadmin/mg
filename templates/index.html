@@ -581,27 +581,28 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
       const cub = item.cubicle_name || '—';
       const eq = item.equipment_name || item.equipment || '—';
       const spec = item.specs || item.specification || '—';
-      const qty = (item.quantity !== undefined && item.quantity !== null) ? item.quantity : '—';
-      const supplied = (item.supplied_by_customer !== undefined && item.supplied_by_customer !== null)
-        ? (item.supplied_by_customer ? '<span class="badge badge-yes">Yes</span>' : '<span class="badge badge-no">No</span>')
-        : '—';
+      const qty     = (item.quantity !== undefined && item.quantity !== null) ? item.quantity : '—';
+      const cubId   = item.cubicle_id || '—';
+      const remarks = item.remarks || '';
       return '<tr>' +
         '<td style="color:#64748b; font-weight:600; width: 40px; text-align: center;">' + (i + 1) + '</td>' +
+        '<td style="text-align: center; width: 50px;">' + esc(cubId) + '</td>' +
         '<td class="cub">' + esc(cub) + '</td>' +
         '<td>' + esc(eq) + '</td>' +
         '<td>' + esc(spec) + '</td>' +
         '<td style="text-align: center;">' + esc(qty) + '</td>' +
-        '<td style="text-align: center;">' + supplied + '</td>' +
+        '<td style="color:#64748b; font-size:0.85em;">' + esc(remarks) + '</td>' +
         '</tr>';
     }).join('');
 
     return h + '<table class="etable"><thead><tr>' +
       '<th style="width: 40px; text-align: center;">#</th>' +
+      '<th style="width: 50px; text-align: center;">ID</th>' +
       '<th>Cubicle Name</th>' +
       '<th>Equipment</th>' +
       '<th>Specification</th>' +
       '<th style="width: 80px; text-align: center;">Qty</th>' +
-      '<th style="width: 150px; text-align: center;">Customer Supplied</th>' +
+      '<th>Remarks</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table>';
   }
 

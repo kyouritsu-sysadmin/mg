@@ -31,6 +31,7 @@ job_store: dict[str, dict] = {}
 
 
 async def _run_analysis(job_id: str, image_dir: Path, project_name: str) -> None:
+    
     try:
         def on_event(event: dict):
             if job_id not in job_store:
@@ -146,7 +147,7 @@ async def process_images(request: Request):
     project_images_dir = IMAGES_DIR / project_name
     project_images_dir.mkdir(exist_ok=True)
 
-    image_paths, _, _page_info = pdf_to_images(saved_path, project_images_dir, dpi=300)
+    image_paths, _page_info = pdf_to_images(saved_path, project_images_dir, dpi=300)
     request.session['image_files'] = [Path(p).name for p in image_paths]
 
     return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)
