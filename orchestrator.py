@@ -1,6 +1,7 @@
-from models import EquipmentList
-from models import ProjectOverview
-from models import ProjectInfo
+from typing import Any
+import asyncio
+from runner import run_task
+from models import EquipmentList, ProjectOverview, ProjectInfo, BreakerExtraction
 import asyncio
 import datetime
 import json
@@ -69,7 +70,7 @@ BASE_TASKS = [
         target_pages="ALL IMAGES",
         page_types=[],                
         schema=ProjectBase,
-        max_turns=5,
+        max_turns=8,
         max_attempts=2
     ),
 
@@ -86,7 +87,7 @@ BASE_TASKS = [
         target_pages="Pages Before the SLDs and breaker list",
         page_types=[LABEL_SPEC_OVERVIEW],
         schema=ProjectOverview,
-        max_turns=5,
+        max_turns=8,
         max_attempts=2
     ),
 
@@ -102,8 +103,23 @@ BASE_TASKS = [
         target_pages="Pages with SLDs and Breaker(MCCB) list",
         page_types=[LABEL_SLD, LABEL_BREAKER_LIST],
         schema=ProjectInfo,
+        max_turns=8,
+        max_attempts=3
+    ),
+
+    Task(
+        id='breaker_extraction',
+        group=2,
+        prompt=_with_rules("""
+        ROLE: Extract the complete low-voltage breaker / MCCB list from the 低圧配電盤リスト
+        (breaker list) pages strictly per the BreakerExtraction schema. Each row in the table
+        is one BreakerList entry. Read every row — do not skip or summarise.
+        """, include_estimation=True),
+        target_pages="Breaker list pages only",
+        page_types=[LABEL_BREAKER_LIST],
+        schema=BreakerExtraction,
         max_turns=5,
-        max_attempts=2
+        max_attempts=3
     ),
 
     Task(
@@ -120,8 +136,8 @@ BASE_TASKS = [
         target_pages="Pages with SLD and Breaker list",
         page_types=[LABEL_SLD, LABEL_BREAKER_LIST],
         schema=EquipmentList,
-        max_turns=5,
-        max_attempts=2
+        max_turns=8,
+        max_attempts=3
     ),
 
 ]
@@ -134,8 +150,6 @@ async def run_agents(ImageListPath: Path, Project_name: str | None, tasks: list[
     if not image_paths:
         raise ValueError(f"No page_*.png images found in {ImageListPath}")
 
-    # Load pre-computed page labels written by pdf_to_images() during conversion.
-    # Falls back to 'unknown' for any page that wasn't classified (e.g. old runs).
     labels_file = ImageListPath / "page_labels.json"
     label_map: dict[str, str] = {}
     if labels_file.exists():
@@ -147,9 +161,6 @@ async def run_agents(ImageListPath: Path, Project_name: str | None, tasks: list[
         for i, p in enumerate(image_paths)
     ]
 
-    # One shared log file for the entire run — both pipeline groups write to it.
-    # Set before asyncio.gather so both tasks inherit the ContextVar via context copy.
-    
     project_scratch = SCRATCH_DIR / project_name
     project_scratch.mkdir(exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -170,36 +181,28 @@ async def run_agents(ImageListPath: Path, Project_name: str | None, tasks: list[
          "total_tasks": len(tasks), "pages": len(image_list),
          "log_file": str(log_path)})
 
-    # grp_01 = [t for t in tasks if t.group == 1]
-    # grp_02 = [t for t in tasks if t.group == 2]
-
     try:
-        
-        # result_01 = await asyncio.gather(
-        #     run_pipeline(tasks=grp_01, ImageList=image_list,
-        #                  project_name=project_name, system_prompt=COMMON_RULES),
-            
-        # )
-        # result_02 = await asyncio.gather(
-        #     run_pipeline(tasks=grp_02, ImageList=image_list,
-        #                  project_name=project_name, system_prompt=COMMON_RULES),
-        # )
-        
-        
-        results = await asyncio.gather(
-            run_pipeline(tasks=BASE_TASKS, ImageList=image_list,
-                         project_name=project_name, system_prompt=COMMON_RULES),
-        )
-    
-        log({"type": "run_end", "project": project_name, "status": "success"})
-        
-        # flat_results = []
-        # if result_01 and isinstance(result_01, list) and len(result_01) > 0:
-        #     flat_results.extend(result_01[0])
-        # if result_02 and isinstance(result_02, list) and len(result_02) > 0:
-        #     flat_results.extend(result_02[0])
 
-        return {"results": results, "total_tasks": len(tasks)}
+        project_exploration = run_task(task=BASE_TASKS[0], ImageList=image_list,
+                       project_name=project_name, system_prompt=COMMON_RULES)
+
+        project_overview = run_task(task=BASE_TASKS[1], ImageList=image_list,
+                       project_name=project_name, system_prompt=COMMON_RULES
+        )
+
+        extraction_pipeline =run_pipeline(tasks=BASE_TASKS[2:], ImageList=image_list,
+                         project_name=project_name, system_prompt=COMMON_RULES)
+
+        res  = await asyncio.gather(project_exploration, project_overview, extraction_pipeline)
+
+        results: dict[str , Any] = {}
+
+        for r in range(len(res)):
+            results[f'Task_{r}'] = res[r]
+
+        log({"type": "run_end", "project": project_name, "status": "success"})
+        return {"results": results, "total_tasks": len(res)}
+
     except Exception as e:
         log({"type": "run_end", "project": project_name, "status": "error", "error": str(e)})
         raise

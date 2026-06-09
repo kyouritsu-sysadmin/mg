@@ -197,6 +197,59 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
   background: #f1f5f9;
   color: #64748b;
 }
+
+/* Accordion Styles */
+.accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.accordion-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+.accordion-header:hover {
+  background: #f1f5f9;
+}
+.accordion-header.active {
+  background: #eff6ff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.accordion-icon {
+  font-size: 0.65rem;
+  color: #64748b;
+  width: 12px;
+}
+.accordion-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1e293b;
+  flex: 1;
+}
+.accordion-title .sub {
+  font-weight: 500;
+  color: #64748b;
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+}
+.accordion-content {
+  padding: 1rem;
+}
 </style>
 {% endraw %}
 </head>
@@ -290,8 +343,13 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
             <div class="step-label">Equipment Extraction</div>
           </div>
           <div class="step-line" id="line-equipment_extraction"></div>
-          <div class="step pending" id="step-equipment_listing">
+          <div class="step pending" id="step-breaker_extraction">
             <div class="step-icon">4</div>
+            <div class="step-label">Breaker Extraction</div>
+          </div>
+          <div class="step-line" id="line-breaker_extraction"></div>
+          <div class="step pending" id="step-equipment_listing">
+            <div class="step-icon">5</div>
             <div class="step-label">Equipment Listing</div>
           </div>
         </div>
@@ -335,13 +393,21 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
     'project_exploration',
     'project_overview',
     'equipment_extraction',
+    'breaker_extraction',
     'equipment_listing'
   ];
 
   function updateStepper(job) {
     const activeTask = job.active_task;
-    // results is [[grp1_tasks…], [grp2_tasks…]] — flatten to get individual task dicts
-    const results = ((job.results && job.results.results) || []).flat();
+    let rawResults = [];
+    if (job.results && job.results.results) {
+      if (Array.isArray(job.results.results)) {
+        rawResults = job.results.results;
+      } else if (typeof job.results.results === 'object') {
+        rawResults = Object.values(job.results.results);
+      }
+    }
+    const results = rawResults.flat();
     const completedTasks = results.map(r => r.task_id);
     
     taskOrder.forEach((taskId, index) => {
@@ -432,7 +498,15 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
         
         if (job.status === 'running') {
           // If there are results, show them progressively
-          if (job.results && job.results.results && job.results.results.length > 0) {
+          let hasResults = false;
+          if (job.results && job.results.results) {
+            if (Array.isArray(job.results.results)) {
+              hasResults = job.results.results.length > 0;
+            } else if (typeof job.results.results === 'object') {
+              hasResults = Object.keys(job.results.results).length > 0;
+            }
+          }
+          if (hasResults) {
             showResults(job.results);
           }
         } else if (job.status === 'done') {
@@ -468,8 +542,15 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
 
   function showResults(results) {
     const root  = document.getElementById('results-root');
-    // results.results is [[grp1_tasks…], [grp2_tasks…]] — flatten before filtering
-    const items = ((results && results.results) || []).flat().filter(r => r && r.result);
+    let rawItems = [];
+    if (results && results.results) {
+      if (Array.isArray(results.results)) {
+        rawItems = results.results;
+      } else if (typeof results.results === 'object') {
+        rawItems = Object.values(results.results);
+      }
+    }
+    const items = rawItems.flat().filter(r => r && r.result);
     if (!items.length) {
       root.className = 'results-root show';
       root.innerHTML = '<p class="empty">No data extracted.</p>';
@@ -502,6 +583,7 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
   function renderTask(id, data) {
     if (id === 'project_exploration')  return renderExploration(data);
     if (id === 'equipment_extraction') return renderEquipment(data);
+    if (id === 'breaker_extraction')   return renderBreakers(data);
     if (id === 'equipment_listing')    return renderListing(data);
     if (id === 'project_overview')     return renderOverview(data);
     return buildGrid(data);
@@ -571,31 +653,55 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
     const list = (d && d.results) || [];
     if (!list.length) return '<p class="empty">No equipment list.</p>';
 
+    // Group items by cubicle_name (preserving order)
+    const grouped = [];
+    const cubicleMap = {};
+    
+    list.forEach(item => {
+      const name = item.cubicle_name || '—';
+      if (!cubicleMap[name]) {
+        cubicleMap[name] = [];
+        grouped.push({ name, items: cubicleMap[name] });
+      }
+      cubicleMap[name].push(item);
+    });
+
     // Add stats header
     let h = '<div class="stats">' +
       stat('Total Items', list.length) +
-      stat('Unique Cubicles', new Set(list.map(x => x.cubicle_name).filter(Boolean)).size) +
+      stat('Unique Cubicles', grouped.length) +
       '</div>';
 
-    const rows = list.map((item, i) => {
-      const cub = item.cubicle_name || '—';
-      const eq = item.equipment_name || item.equipment || '—';
-      const spec = item.specs || item.specification || '—';
-      const qty     = (item.quantity !== undefined && item.quantity !== null) ? item.quantity : '—';
-      const cubId   = item.cubicle_id || '—';
-      const remarks = item.remarks || '';
-      return '<tr>' +
-        '<td style="color:#64748b; font-weight:600; width: 40px; text-align: center;">' + (i + 1) + '</td>' +
-        '<td style="text-align: center; width: 50px;">' + esc(cubId) + '</td>' +
-        '<td class="cub">' + esc(cub) + '</td>' +
-        '<td>' + esc(eq) + '</td>' +
-        '<td>' + esc(spec) + '</td>' +
-        '<td style="text-align: center;">' + esc(qty) + '</td>' +
-        '<td style="color:#64748b; font-size:0.85em;">' + esc(remarks) + '</td>' +
-        '</tr>';
-    }).join('');
+    let rowsHtml = '';
+    let globalIndex = 1;
 
-    return h + '<table class="etable"><thead><tr>' +
+    grouped.forEach(group => {
+      const rowspan = group.items.length;
+      group.items.forEach((item, idx) => {
+        const isFirst = idx === 0;
+        const eq = item.equipment_name || item.equipment || '—';
+        const spec = item.specs || item.specification || '—';
+        const qty     = (item.quantity !== undefined && item.quantity !== null) ? item.quantity : '—';
+        const cubId   = item.cubicle_id || '—';
+        const remarks = item.remarks || '';
+
+        rowsHtml += '<tr>';
+        rowsHtml += '<td style="color:#64748b; font-weight:600; width: 40px; text-align: center;">' + (globalIndex++) + '</td>';
+        
+        if (isFirst) {
+          rowsHtml += '<td rowspan="' + rowspan + '" style="text-align: center; width: 50px; border-right: 1px solid #e2e8f0; vertical-align: middle; background: #fff;">' + esc(cubId) + '</td>';
+          rowsHtml += '<td rowspan="' + rowspan + '" class="cub" style="border-right: 1px solid #e2e8f0; vertical-align: middle; background: #fff;">' + esc(group.name) + '</td>';
+        }
+        
+        rowsHtml += '<td>' + esc(eq) + '</td>';
+        rowsHtml += '<td>' + esc(spec) + '</td>';
+        rowsHtml += '<td style="text-align: center; font-weight: 600; color: #0f172a;">' + esc(qty) + '</td>';
+        rowsHtml += '<td style="color:#64748b; font-size:0.85em;">' + esc(remarks) + '</td>';
+        rowsHtml += '</tr>';
+      });
+    });
+
+    return h + '<table class="etable" style="border: 1px solid #cbd5e1;"><thead><tr>' +
       '<th style="width: 40px; text-align: center;">#</th>' +
       '<th style="width: 50px; text-align: center;">ID</th>' +
       '<th>Cubicle Name</th>' +
@@ -603,7 +709,99 @@ table.etable td.cub{font-weight:700;color:#334155;white-space:nowrap}
       '<th>Specification</th>' +
       '<th style="width: 80px; text-align: center;">Qty</th>' +
       '<th>Remarks</th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table>';
+      '</tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+  }
+
+  function renderBreakers(d) {
+    const list = (d && d.breakerlist) || [];
+    if (!list.length) return '<p class="empty">No breakers extracted.</p>';
+
+    const groups = {};
+    list.forEach(item => {
+      const cub = item.cubicle_name || 'Unspecified Cubicle';
+      if (!groups[cub]) {
+        groups[cub] = {
+          cubicle_type: item.cubicle_type || '',
+          breakers: []
+        };
+      }
+      groups[cub].breakers.push(item);
+    });
+
+    let h = '<div class="stats">' +
+      stat('Total Breakers', list.length) +
+      stat('Total Cubicles', Object.keys(groups).length) +
+      '</div>';
+
+    let accordion = '<div class="accordion">';
+    Object.entries(groups).forEach(([cubName, grp], idx) => {
+      const isFirst = idx === 0;
+      const activeClass = isFirst ? ' active' : '';
+      const displayStyle = isFirst ? 'block' : 'none';
+      const icon = isFirst ? '▼' : '▶';
+
+      accordion += '<div class="accordion-item" id="accordion-item-' + idx + '">';
+      accordion += '<button class="accordion-header' + activeClass + '" onclick="toggleAccordion(' + idx + ')">';
+      accordion += '<span class="accordion-icon">' + icon + '</span>';
+      accordion += '<span class="accordion-title">' + esc(cubName) + ' <span class="sub">' + esc(grp.cubicle_type) + '</span></span>';
+      accordion += '<span class="badge badge-yes">' + grp.breakers.length + ' Breakers</span>';
+      accordion += '</button>';
+      accordion += '<div class="accordion-content" style="display: ' + displayStyle + '">';
+      
+      accordion += '<table class="etable"><thead><tr>' +
+        '<th>Load Name</th>' +
+        '<th>Type</th>' +
+        '<th>Poles</th>' +
+        '<th>AF/AT</th>' +
+        '<th>Capacity</th>' +
+        '<th>Switch Cap</th>' +
+        '<th>Main Line</th>' +
+        '<th>Line Size</th>' +
+        '<th>Transformer</th>' +
+        '<th>Remarks</th>' +
+        '</tr></thead><tbody>';
+
+      grp.breakers.forEach(b => {
+        const afAt = [b.af, b.at].filter(Boolean).join('/');
+        accordion += '<tr>' +
+          '<td><strong>' + esc(b.load_name || '—') + '</strong></td>' +
+          '<td><span class="badge badge-no">' + esc(b.type || '—') + '</span></td>' +
+          '<td>' + esc(b.poles || '—') + 'P</td>' +
+          '<td>' + esc(afAt || '—') + '</td>' +
+          '<td>' + esc(b.capacity || '—') + '</td>' +
+          '<td>' + esc(b.switch_capacity || '—') + '</td>' +
+          '<td>' + esc(b.main_line_number || '—') + '</td>' +
+          '<td>' + esc(b.main_line_size || '—') + '</td>' +
+          '<td>' + esc(b.transformer || '—') + '</td>' +
+          '<td><small>' + esc(b.remarks || '') + '</small></td>' +
+          '</tr>';
+      });
+
+      accordion += '</tbody></table>';
+      accordion += '</div>';
+      accordion += '</div>';
+    });
+    accordion += '</div>';
+
+    return h + accordion;
+  }
+
+  window.toggleAccordion = function(idx) {
+    const item = document.getElementById('accordion-item-' + idx);
+    if (!item) return;
+    const header = item.querySelector('.accordion-header');
+    const content = item.querySelector('.accordion-content');
+    const icon = item.querySelector('.accordion-icon');
+    
+    if (content.style.display === 'block') {
+      content.style.display = 'none';
+      header.classList.remove('active');
+      icon.textContent = '▶';
+    } else {
+      content.style.display = 'block';
+      header.classList.add('active');
+      icon.textContent = '▼';
+    }
   }
 
   function renderOverview(d) {

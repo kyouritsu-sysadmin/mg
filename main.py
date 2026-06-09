@@ -61,7 +61,7 @@ async def _run_analysis(job_id: str, image_dir: Path, project_name: str) -> None
                                 }
                                 # Ensure results structure matches
                                 if 'results' not in job or not isinstance(job['results'], dict):
-                                    job['results'] = {'results': [], 'total_tasks': 4}
+                                    job['results'] = {'results': [], 'total_tasks': 5}
                                 
                                 # Update or append
                                 existing = [r for r in job['results']['results'] if r.get('task_id') == task_id]
@@ -79,7 +79,7 @@ async def _run_analysis(job_id: str, image_dir: Path, project_name: str) -> None
                         'error': event.get('error', 'Unknown error')
                     }
                     if 'results' not in job or not isinstance(job['results'], dict):
-                        job['results'] = {'results': [], 'total_tasks': 4}
+                        job['results'] = {'results': [], 'total_tasks': 5}
                     existing = [r for r in job['results']['results'] if r.get('task_id') == task_id]
                     if not existing:
                         job['results']['results'].append(task_result)
@@ -175,7 +175,7 @@ async def explore_project(request: Request):
     job_store[job_id] = {
         'status': 'running',
         'active_task': None,
-        'results': {'results': [], 'total_tasks': 4}
+        'results': {'results': [], 'total_tasks': 5}
     }
     asyncio.create_task(_run_analysis(job_id, image_dir, project_name))
 

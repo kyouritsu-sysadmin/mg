@@ -66,11 +66,11 @@ def _options(gate, cwd: Path, max_turns: int, system_prompt: str | None = None) 
         permission_mode="acceptEdits",
         max_turns=max_turns,
         max_buffer_size=10 * 1024 * 1024,
-        thinking={'type': 'enabled', 'budget_tokens': 1024},
+        thinking={'type': 'thinking', 'budget_tokens': 2048},
         cwd=cwd,
         can_use_tool=gate,
         system_prompt=system_prompt,
-        effort='medium',
+        effort='max',
     )
 
 
@@ -138,6 +138,11 @@ async def run_turns(
             result_path.write_text(json.dumps(data.model_dump(), indent=2))
             log({"type": "task_end", "task_id": task.id, "status": "success",
                  "attempt": attempt, "output_path": str(result_path)})
+            confidence = getattr(data, 'confidence', None)
+            if confidence is not None and confidence != 'high':
+                log({"type": "confidence_low", "task_id": task.id,
+                     "attempt": attempt, "confidence": confidence})
+
             return {
                 'status': 'success',
                 'task_id': task.id,
@@ -145,13 +150,15 @@ async def run_turns(
                 'output_path': str(result_path)
             }
 
+            
+
         except (json.JSONDecodeError, ValidationError) as e:
             if attempt == task.max_attempts:
                 log({"type": "task_end", "task_id": task.id, "status": "failed",
-                     "attempt": attempt, "error": str(e)})
+                    "attempt": attempt, "error": str(e)})
                 raise
             log({"type": "retry", "task_id": task.id, "attempt": attempt,
-                 "reason": "validation_error", "error": str(e)})
+                "reason": "validation_error", "error": str(e)})
             current_prompt = (
                 f"Your previous output failed validation: {e}\n"
                 "Fix it and return only valid JSON matching the schema."

@@ -23,7 +23,7 @@ class Task:
         what type of content each attached image contains and where to focus.
         """
         manifest = "\n".join(
-            f"  Page {d['page_number']} [{d['label']}]"
+            f"  Page {d['page_number']} [{d['label']}]: {d['path']}"
             for d in image_list
         )
         focus = (
