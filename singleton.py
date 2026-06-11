@@ -103,6 +103,7 @@ async def run_phase2(
     system_prompt: str,
     phase2_tasks: list,
     model: str = "claude-sonnet-4-6",
+    on_result: Callable[[str, str, dict], None] | None = None,
 ) -> dict[str, dict]:
     ranges = derive_project_ranges(project_base, len(image_list))
 
@@ -110,15 +111,18 @@ async def run_phase2(
         proj_images = [img for img in image_list if start <= img["page_number"] <= end]
         filtered = task.filter_pages(proj_images)
         if not filtered:
-            return proj_label, task.id, {"status": "skipped", "result": None}
-        content = await content_builder(filtered, task)
-        result = await first_turn(
-            system_prompt=system_prompt,
-            content=content,
-            schema=task.schema,
-            model=model,
-        )
-        return proj_label, task.id, result
+            response = {"status": "skipped", "result": None}
+        else:
+            content = await content_builder(filtered, task)
+            response = await first_turn(
+                system_prompt=system_prompt,
+                content=content,
+                schema=task.schema,
+                model=model,
+            )
+        if on_result:
+            on_result(proj_label, task.id, response)
+        return proj_label, task.id, response
 
     coroutines = [
         run_task_for_project(label, start, end, task)

@@ -228,35 +228,34 @@ async def run_agents(
              "attempt": phase1_response["attempt"], "output_path": phase1_path})
 
         # ── Phase 2 ──────────────────────────────────────────────────────────
-        phase2_results = await run_phase2(
+        all_results: dict = {"phase1": phase1_data, "phase2": {}}
+
+        def on_phase2_result(proj_label: str, task_id: str, response: dict) -> None:
+            status = response.get("status")
+            if status == "skipped":
+                log({"type": "task_end", "task_id": task_id,
+                     "project_label": proj_label, "status": "skipped"})
+                return
+            if status == "success":
+                result_data = response["result"].model_dump()
+                out_path = _save_result(result_data, project_scratch, project_name, f"{proj_label}_{task_id}")
+                log({"type": "task_end", "task_id": task_id,
+                     "project_label": proj_label, "status": "success",
+                     "attempt": response.get("attempt"), "output_path": out_path})
+                all_results["phase2"].setdefault(proj_label, {})[task_id] = result_data
+            else:
+                log({"type": "task_end", "task_id": task_id,
+                     "project_label": proj_label, "status": status,
+                     "error": response.get("error")})
+
+        await run_phase2(
             project_base=project_base,
             image_list=image_list,
             content_builder=build_content,
             system_prompt=SYSTEM_PROMPT,
             phase2_tasks=PHASE2_TASKS,
+            on_result=on_phase2_result,
         )
-
-        # save + log each Phase 2 task result
-        all_results: dict = {"phase1": phase1_data, "phase2": {}}
-        for proj_label, tasks in phase2_results.items():
-            all_results["phase2"][proj_label] = {}
-            for task_id, response in tasks.items():
-                status = response.get("status")
-                if status == "skipped":
-                    log({"type": "task_end", "task_id": task_id,
-                         "project_label": proj_label, "status": "skipped"})
-                    continue
-                if status == "success":
-                    result_data = response["result"].model_dump()
-                    out_path = _save_result(result_data, project_scratch, project_name, f"{proj_label}_{task_id}")
-                    log({"type": "task_end", "task_id": task_id,
-                         "project_label": proj_label, "status": "success",
-                         "attempt": response.get("attempt"), "output_path": out_path})
-                    all_results["phase2"][proj_label][task_id] = result_data
-                else:
-                    log({"type": "task_end", "task_id": task_id,
-                         "project_label": proj_label, "status": status,
-                         "error": response.get("error")})
 
         log({"type": "run_end", "project": project_name, "status": "success"})
         return {"results": all_results}
