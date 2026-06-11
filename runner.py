@@ -25,12 +25,10 @@ from tasks import Task
 from agent import main, run_pipeline_session
 
 
-async def gatekeep(tool_name: str | None, path: Path | None, _context: str | None = None):
+async def gatekeep(tool_name: str | None, _path: Path | None, _context: str | None = None):
     if tool_name in ALLOWED_TOOLS:
         return PermissionResultAllow()
-    if path and path.resolve().is_relative_to(WORKSPACE):
-        return PermissionResultAllow()
-    return PermissionResultDeny(message='write command denied')
+    return PermissionResultDeny(message=f'Tool {tool_name!r} not permitted. Use mcp__image_tools__crop_region only.')
 
 
 async def run_task(task: Task, ImageList: list[dict], project_name: str,

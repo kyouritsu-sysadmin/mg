@@ -91,6 +91,7 @@ class ProjectBase(BaseModel):
     cubicle_count_in_each_project: dict[str, int]
     unique_info:                  str
     design_firm:                  str
+    confidence:        Literal["high", "medium", "low"]
 
 
 # task: equipment_extraction

@@ -15,6 +15,7 @@ class Task:
     page_types: list[str] = field(default_factory=list)
     max_turns: int = 10
     max_attempts: int = 3
+    effort: str = "medium"
 
     def base_prompt_text(self, image_list: list[dict]) -> str:
         """Text prompt used when images are embedded directly as content blocks.

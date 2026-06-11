@@ -87,8 +87,10 @@ async def _run_analysis(job_id: str, image_dir: Path, project_name: str) -> None
                         idx = job['results']['results'].index(existing[0])
                         job['results']['results'][idx] = task_result
 
-        results = await run_agents(ImageListPath=image_dir, Project_name=project_name, on_event=on_event)
-        job_store[job_id] = {'status': 'done', 'results': results}
+        await run_agents(ImageListPath=image_dir, Project_name=project_name, on_event=on_event)
+        job = job_store.get(job_id, {})
+        job['status'] = 'done'
+        job_store[job_id] = job
     except Exception as e:
         job_store[job_id] = {'status': 'error', 'message': str(e)}
 
@@ -143,7 +145,7 @@ async def process_images(request: Request):
     if not saved_path or not os.path.exists(saved_path):
         return JSONResponse({'error': 'No valid file in session'}, status_code=400)
 
-    project_name      = request.session.get('project_name', 'unknown')
+    project_name = request.session.get('project_name', 'unknown')
     project_images_dir = IMAGES_DIR / project_name
     project_images_dir.mkdir(exist_ok=True)
 

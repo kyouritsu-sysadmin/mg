@@ -115,9 +115,9 @@ def pdf_to_images(
 
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 
-    path = Path('workspace/__scratch')
-    images = pdf_to_images(pdf_path='data/__originals/見積④.pdf', output_dir=path, dpi=300)
+#     path = Path('workspace/__scratch')
+#     images = pdf_to_images(pdf_path='data/__originals/見積④.pdf', output_dir=path, dpi=300)
 
-    print(images)
+#     print(images)

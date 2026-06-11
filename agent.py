@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import time
 from collections.abc import AsyncGenerator
 from typing import Any
 from claude_agent_sdk import ClaudeSDKClient
@@ -11,6 +12,7 @@ from claude_agent_sdk import (
     ResultMessage,
     TextBlock,
     ThinkingBlock,
+    ToolUseBlock,
     ClaudeAgentOptions
 )
 from tools import image_tools_server
@@ -59,18 +61,19 @@ async def _image_message(
     }
 
 
-def _options(gate, cwd: Path, max_turns: int, system_prompt: str | None = None) -> ClaudeAgentOptions:
+def _options(gate, cwd: Path, max_turns: int, system_prompt: str | None = None,
+             effort: str = 'medium') -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         mcp_servers={"image_tools": image_tools_server},
         allowed_tools=["mcp__image_tools__crop_region"],
         permission_mode="acceptEdits",
         max_turns=max_turns,
         max_buffer_size=10 * 1024 * 1024,
-        thinking={'type': 'thinking', 'budget_tokens': 2048},
+        thinking={'type': 'enabled', 'budget_tokens': 3000},
         cwd=cwd,
         can_use_tool=gate,
         system_prompt=system_prompt,
-        effort='max',
+        effort=effort,
     )
 
 
@@ -88,32 +91,63 @@ async def run_turns(
     """
     log = _log_writer.get()
     log({"type": "task_start", "task_id": task.id, "group": task.group,
-         "max_turns": task.max_turns, "max_attempts": task.max_attempts})
+         "max_turns": task.max_turns, "max_attempts": task.max_attempts,
+         "effort": task.effort, "thinking_budget": 8192})
 
     current_prompt: str | AsyncGenerator = prompt
 
     for attempt in range(1, task.max_attempts + 1):
         result = ""
         turn = 0
+        turn_start: float | None = None
+
+        query_start = time.perf_counter()
         await client.query(current_prompt)
+
         async for message in client.receive_response():
             if isinstance(message, AssistantMessage):
+                now = time.perf_counter()
+
+                if turn == 0:
+                    log({"type": "ttft", "task_id": task.id, "attempt": attempt,
+                         "ttft_s": round(now - query_start, 2)})
+
+                turn_dur = round(now - turn_start, 2) if turn_start is not None else None
                 turn += 1
+                turn_start = now
+
                 thinking_text = ""
                 text_content = ""
+                tool_calls: list[str] = []
+                thinking_chars = 0
+
                 print(f"\n--- Turn {turn} ---")
                 for block in message.content:
                     if isinstance(block, ThinkingBlock):
                         print(f"[Thinking]: {block.thinking}")
                         thinking_text = block.thinking
+                        thinking_chars = len(block.thinking)
                     elif isinstance(block, TextBlock):
                         print(f"[Text]: {block.text}")
                         text_content = block.text
+                    elif isinstance(block, ToolUseBlock):
+                        tool_calls.append(block.name)
+
+                if tool_calls:
+                    print(f"[Tools]: {tool_calls}")
+
+                msg_tokens = message.usage or {}
                 log({"type": "turn", "task_id": task.id, "attempt": attempt,
-                     "turn": turn, "thinking": thinking_text, "text": text_content})
+                     "turn": turn, "thinking": thinking_text, "text": text_content,
+                     "tool_calls": tool_calls, "thinking_chars": thinking_chars,
+                     "turn_dur_s": turn_dur,
+                     "msg_input_tokens": msg_tokens.get("input_tokens"),
+                     "msg_output_tokens": msg_tokens.get("output_tokens")})
+
             if isinstance(message, ResultMessage):
                 result = message.result or ""
                 tokens = message.usage or {}
+                attempt_dur = round(time.perf_counter() - query_start, 2)
                 print(f"\n--- Result ---")
                 print(f"Turns: {message.num_turns}")
                 print(f"Total cost: ${message.total_cost_usd:.4f}")
@@ -121,7 +155,8 @@ async def run_turns(
                 log({"type": "result", "task_id": task.id, "attempt": attempt,
                      "num_turns": message.num_turns, "cost_usd": message.total_cost_usd,
                      "input_tokens": tokens.get("input_tokens"),
-                     "output_tokens": tokens.get("output_tokens")})
+                     "output_tokens": tokens.get("output_tokens"),
+                     "attempt_dur_s": attempt_dur})
  
         if not result.strip():
             print(f"[Attempt {attempt}] Empty result — Claude produced no output.")
@@ -179,8 +214,13 @@ async def main(project_name: str, gate, cwd: Path, Task: Task,
 
     token = _project_crops_dir.set(project_crops_dir)
     try:
-        async with ClaudeSDKClient(options=_options(gate, cwd, Task.max_turns, system_prompt)) as client:
-            prompt = _image_message(Task.filter_pages(image_list), Task.base_prompt_text(image_list))
+        log = _log_writer.get()
+        filtered = Task.filter_pages(image_list)
+        payload_bytes = sum(Path(img["path"]).stat().st_size for img in filtered)
+        log({"type": "session_start", "task_id": Task.id, "effort": Task.effort,
+             "image_count": len(filtered), "image_bytes": payload_bytes})
+        async with ClaudeSDKClient(options=_options(gate, cwd, Task.max_turns, system_prompt, Task.effort)) as client:
+            prompt = _image_message(filtered, Task.base_prompt_text(image_list))
             return await run_turns(client, Task, prompt, project_scratch_dir, project_name)
     finally:
         _project_crops_dir.reset(token)
@@ -208,13 +248,22 @@ async def run_pipeline_session(
 
     token = _project_crops_dir.set(project_crops_dir)
     try:
+        log = _log_writer.get()
         total_turns = sum(t.max_turns for t in tasks)
-        async with ClaudeSDKClient(options=_options(gate, cwd, total_turns, system_prompt)) as client:
+        effort_order = ['low', 'medium', 'high', 'max']
+        pipeline_effort = max(tasks, key=lambda t: effort_order.index(t.effort) if t.effort in effort_order else 1).effort
+        first_task = tasks[0]
+        filtered_first = first_task.filter_pages(image_list)
+        payload_bytes = sum(Path(img["path"]).stat().st_size for img in filtered_first)
+        log({"type": "session_start", "task_id": "pipeline", "effort": pipeline_effort,
+             "image_count": len(filtered_first), "image_bytes": payload_bytes,
+             "task_ids": [t.id for t in tasks]})
+        async with ClaudeSDKClient(options=_options(gate, cwd, total_turns, system_prompt, pipeline_effort)) as client:
             results = []
             prev_result = None
             for i, task in enumerate(tasks):
                 if i == 0:
-                    prompt = _image_message(task.filter_pages(image_list), task.base_prompt_text(image_list))
+                    prompt = _image_message(filtered_first, task.base_prompt_text(image_list))
                 else:
                     prompt = task.continuation(prev_result)
                 result = await run_turns(client, task, prompt, project_scratch_dir, project_name)
